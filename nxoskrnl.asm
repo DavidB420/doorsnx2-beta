@@ -2854,7 +2854,6 @@ use32
 gdtloc times 6 db 0
 idtloc times 6 db 0
 
-
 pic32:
 mov al,0x11
 out 0x20,al
@@ -3752,6 +3751,10 @@ je nextrootentry
 mov al,byte [esi]
 cmp al,0xe5
 je nextrootentry
+cmp dword [esi],538979886
+je nextrootentry
+cmp dword [esi],538976302
+je nextrootentry
 dec ecx
 cmp ecx,0xffffffff
 jne nextrootentry
@@ -3835,6 +3838,10 @@ cmp al,0x0f
 je nextrootentry2
 mov al,byte [esi]
 cmp al,0xe5
+je nextrootentry2
+cmp dword [esi],538979886
+je nextrootentry2
+cmp dword [esi],538976302
 je nextrootentry2
 inc ecx
 jmp nextrootentry2

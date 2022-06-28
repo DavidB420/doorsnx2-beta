@@ -101,7 +101,30 @@ cmp word [mouseY],480
 jg s4
 call selectFile
 s4:
+cmp word [mouseX],459
+jle s5
+cmp word [mouseX],475
+jg s5
+cmp word [mouseY],13
+jle s5
+cmp word [mouseY],27
+jg s5
+call upfolder
+s5:
 jmp mainLoop
+
+upfolder:
+cmp dword [disk_buffer+32],538979886
+jne doneupfolder
+push afterfolderopen
+pusha
+push word [X]
+push word [Y]
+push word [Color]
+mov esi,disk_buffer+32
+jmp notlfn
+doneupfolder:
+ret
 
 selectFile:
 mov byte [buttonornot],1
@@ -131,6 +154,7 @@ mov word [selectVal],ax
 imul bx,17
 add bx,30
 call openFolder
+afterfolderopen:
 cmp byte [folderLoaded],1
 je loadnewfolder
 mov word [prevVal],bx
