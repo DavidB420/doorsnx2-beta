@@ -3701,6 +3701,8 @@ mov al,byte [esi]
 and al,0x0f
 cmp al,1
 jne nextrootentry
+cmp byte [esi+2bh],0x0f
+je nextrootentry
 dec ecx
 cmp ecx,0xffffffff
 jne nextrootentry
@@ -3738,12 +3740,23 @@ cmp dx,0
 je notvalidchar
 cmp dx,0xff
 je notvalidchar
+cmp word [X],600
+jg printdots
 call sys_printChar
+jmp notvalidchar
 notvalidchar:
 inc esi
 loop loopreadfivechars
 pop esi
 ret
+printdots:
+mov dx,'.'
+call sys_printChar
+call sys_printChar
+call sys_printChar
+pop esi
+add esp,4
+jmp nolfnfound
 foundpossiblesfn2:
 mov al,byte [esi-21]
 cmp al,0x0f
@@ -3829,6 +3842,8 @@ and al,0x0f
 cmp al,1
 jne nextrootentry2
 cmp al,0xe5
+je nextrootentry2
+cmp byte [esi+2bh],0x0f
 je nextrootentry2
 inc ecx
 jmp nextrootentry2
