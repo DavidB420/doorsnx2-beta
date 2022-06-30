@@ -6,6 +6,8 @@ org 50000h
 mov esi,titleString
 call sys_setupScreen
 
+call sys_getrootdirectory
+
 call drawFirstScreen
 
 call sys_getoldlocation
@@ -28,6 +30,8 @@ endVal dw 0
 prevVal dw 30
 selectVal dw 0
 itemSelected db 0
+viewerpos dd 60000h
+navigateend dd 0
 
 lbuttonclick:
 cmp word [mouseX],619
@@ -111,7 +115,228 @@ cmp word [mouseY],27
 jg s5
 call upfolder
 s5:
+cmp word [mouseX],619
+jle s6
+cmp word [mouseX],635
+jg s6
+cmp word [mouseY],13
+jle s6
+cmp word [mouseY],27
+jg s6
+call viewersub
+s6:
 jmp mainLoop
+
+navigatetofile:
+cmp byte [itemSelected],0
+je donenavigatetofile
+mov ax,word [selectVal]
+add ax,word [startVal]
+movzx ecx,ax
+call sys_displayfatfn
+cmp al,1
+jne skiplfn2
+add esi,32
+skiplfn2:
+cmp byte [esi+0bh],10h
+je donenavigatetofile
+cmp byte [esi+0bh],16h
+je donenavigatetofile
+mov dword [esival],esi
+mov edi,fileFN
+mov ecx,8
+loopsavesfn:
+lodsb
+cmp al,' '
+je doneloopsavesfn
+stosb
+loop loopsavesfn
+doneloopsavesfn:
+mov esi,dword [esival]
+add esi,8
+mov al,'.'
+stosb
+mov ecx,3
+repe movsb
+ret
+donenavigatetofile:
+jmp dword [navigateend]
+
+viewersub:
+mov esi,disk_buffer
+mov edi,80000h
+mov ecx,dword [directorySize]
+repe movsb
+mov dword [navigateend],doneviewersub2
+call navigatetofile
+mov esi,fileFN
+mov edi,60000h
+call sys_loadfile
+cmp byte [loadsuccess],1
+je doneviewersub
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+mov word [fileSize],ax
+mov byte [buttonornot],1
+mov ax,603
+mov bx,2
+mov cx,618
+mov dx,11
+mov word [Color],0x079F
+call sys_drawbox
+mov ax,585
+mov bx,2
+mov cx,600
+mov dx,11
+call sys_drawbox
+mov word [X],606
+mov word [Y],3
+mov esi,upspr
+mov bl,1
+call sys_dispsprite
+mov word [X],588
+mov word [Y],3
+mov esi,downspr
+mov bl,1
+call sys_dispsprite
+mov byte [buttonornot],0
+mov esi,dword [viewerpos]
+mov word [Color],0
+mov word [X],1
+mov word [Y],15
+call sys_printString
+viewloop:
+call sys_mouseemudisable
+mov dword [mouseaddress],lbuttonclick2
+mov dword [keybaddress],viewercontrols
+mov dword [bgtaskaddress],sys_nobgtasks
+jmp sys_windowloop
+doneviewersub2:
+add esp,4
+doneviewersub:
+mov esi,80000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
+movzx ecx,word [fileSize]
+mov eax,0
+mov edi,60000h
+repe stosb
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+mov dword [viewerpos],60000h
+call sys_mouseemuenable
+ret
+fileFN times 13 db 0
+esival dd 0
+
+lbuttonclick2:
+cmp word [mouseX],619
+jle s21
+cmp word [mouseX],636
+jg s21
+cmp word [mouseY],1
+jle s21
+cmp word [mouseY],13
+jg s21
+jmp doneviewersub
+s21:
+cmp word [mouseX],602
+jle s22
+cmp word [mouseX],618
+jg s22
+cmp word [mouseY],1
+jle s22
+cmp word [mouseY],13
+jg s22
+jmp goup
+s22:
+cmp word [mouseX],584
+jle s23
+cmp word [mouseX],600
+jg s23
+cmp word [mouseY],1
+jle s23
+cmp word [mouseY],13
+jg s23
+jmp godown
+s23:
+jmp viewloop
+
+viewercontrols:
+cmp byte [keydata],1
+je goup
+cmp byte [keydata],2
+je godown
+cmp byte [keydata],6
+je doneviewersub
+jmp viewloop
+goup:
+mov byte [downornot],0
+mov esi,dword [viewerpos]
+cmp esi,60000h
+je viewloop
+mov word [Color],0xffff
+mov word [X],1
+mov word [Y],15
+call sys_printString
+mov esi,dword [viewerpos]
+std
+uploop:
+lodsb
+cmp esi,5ffffh
+je doneuploop
+dec dword [viewerpos]
+cmp al,0x0a
+je doneuploop
+jmp uploop
+doneuploop:
+cld
+mov esi,dword [viewerpos]
+mov word [Color],0
+mov word [X],1
+mov word [Y],15
+call sys_printString
+mov byte [state],0
+jmp viewloop
+godown:
+mov esi,dword [viewerpos]
+mov word [Color],0xffff
+mov word [X],1
+mov word [Y],15
+call sys_printString
+cmp byte [esi],0
+je endofdown
+continuedown:
+mov esi,dword [viewerpos]
+downloop:
+lodsb
+inc dword [viewerpos]
+cmp al,0
+je donedownloop
+cmp al,0x0a
+je donedownloop
+jmp downloop
+donedownloop:
+mov esi,dword [viewerpos]
+mov word [Color],0
+mov word [X],1
+mov word [Y],15
+call sys_printString
+mov byte [state],0
+jmp viewloop
+endofdown:
+cmp byte [downornot],1
+je donedownloop
+mov byte [downornot],1
+jmp continuedown
+downornot db 0
 
 upfolder:
 cmp dword [disk_buffer+32],538979886
@@ -491,7 +716,6 @@ mov word [Y],461
 mov esi,downspr
 mov bl,1
 call sys_dispsprite
-call sys_getrootdirectory
 mov dword [directorySize],1c00h
 loadnewfolder:
 mov esi,disk_buffer
