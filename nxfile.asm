@@ -30,7 +30,7 @@ endVal dw 0
 prevVal dw 30
 selectVal dw 0
 itemSelected db 0
-viewerpos dd 60000h
+viewerpos dd 70000h
 navigateend dd 0
 
 lbuttonclick:
@@ -125,9 +125,119 @@ cmp word [mouseY],27
 jg s6
 call viewersub
 s6:
+cmp word [mouseX],579
+jle s7
+cmp word [mouseX],595
+jg s7
+cmp word [mouseY],13
+jle s7
+cmp word [mouseY],27
+jg s7
+call deletefile
+s7:
 jmp mainLoop
 
+deletefile:
+cmp byte [itemSelected],0
+je donedeletefile
+mov ax,125
+mov bx,175
+mov cx,575
+mov dx,275
+call sys_drawbox
+mov word [X],150
+mov word [Y],200
+mov bl,2
+mov esi,warnspr
+call sys_dispsprite
+mov esi,deleteMessage
+mov word [Color],0
+mov word [X],190
+mov word [Y],206
+call sys_printString
+mov byte [buttonornot],1
+mov word [Color],0xffff
+mov ax,280
+mov bx,230
+mov cx,315
+mov dx,250
+call sys_drawbox
+mov ax,350
+mov bx,230
+mov cx,390
+mov dx,250
+call sys_drawbox
+mov byte [buttonornot],0
+mov esi,ok
+mov word [Color],0
+mov word [X],291
+mov word [Y],235
+call sys_printString
+mov byte [buttonornot],0
+mov esi,cancel
+mov word [Color],0
+mov word [X],353
+mov word [Y],235
+call sys_printString
+deleteloop:
+mov dword [mouseaddress],lbuttonclick3
+mov dword [keybaddress],sys_windowloop
+mov dword [bgtaskaddress],sys_nobgtasks
+jmp sys_windowloop
+donedeletefile:
+mov esi,60000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+ret
+deleteMessage db 'WARNING: Are you sure you want to delete the selected item?',0
+ok db 'OK',0
+cancel db 'Cancel',0
+
+lbuttonclick3:
+cmp word [mouseX],279
+jle s31
+cmp word [mouseX],315
+jg s31
+cmp word [mouseY],229
+jle s31
+cmp word [mouseY],250
+jg s31
+call recursivedelete
+jmp donedeletefile
+s31:
+cmp word [mouseX],349
+jle s32
+cmp word [mouseX],390
+jg s32
+cmp word [mouseY],229
+jle s32
+cmp word [mouseY],250
+jg s32
+jmp donedeletefile
+s32:
+jmp deleteloop
+
+recursivedelete:
+mov dword [navigateend],donerecursivedelete
+call navigatetofile
+donerecursivedelete:
+mov esi,fileFN
+call sys_deletefile
+ret
+
 navigatetofile:
+mov esi,disk_buffer
+mov edi,60000h
+mov ecx,dword [directorySize]
+repe movsb
 cmp byte [itemSelected],0
 je donenavigatetofile
 mov ax,word [selectVal]
@@ -163,14 +273,10 @@ donenavigatetofile:
 jmp dword [navigateend]
 
 viewersub:
-mov esi,disk_buffer
-mov edi,80000h
-mov ecx,dword [directorySize]
-repe movsb
 mov dword [navigateend],doneviewersub2
 call navigatetofile
 mov esi,fileFN
-mov edi,60000h
+mov edi,70000h
 call sys_loadfile
 cmp byte [loadsuccess],1
 je doneviewersub
@@ -215,13 +321,13 @@ jmp sys_windowloop
 doneviewersub2:
 add esp,4
 doneviewersub:
-mov esi,80000h
+mov esi,60000h
 mov edi,disk_buffer
 mov ecx,dword [directorySize]
 repe movsb
 movzx ecx,word [fileSize]
 mov eax,0
-mov edi,60000h
+mov edi,70000h
 repe stosb
 mov esi,titleString
 call sys_setupScreen
@@ -230,7 +336,7 @@ call drawFirstScreen
 mov byte [state],0
 mov byte [itemSelected],0
 mov word [selectVal],0
-mov dword [viewerpos],60000h
+mov dword [viewerpos],70000h
 call sys_mouseemuenable
 ret
 fileFN times 13 db 0
@@ -280,7 +386,7 @@ jmp viewloop
 goup:
 mov byte [downornot],0
 mov esi,dword [viewerpos]
-cmp esi,60000h
+cmp esi,70000h
 je viewloop
 mov word [Color],0xffff
 mov word [X],1
@@ -290,7 +396,7 @@ mov esi,dword [viewerpos]
 std
 uploop:
 lodsb
-cmp esi,5ffffh
+cmp esi,6ffffh
 je doneuploop
 dec dword [viewerpos]
 cmp al,0x0a
@@ -471,17 +577,17 @@ mov ecx,9
 repe movsb
 mov edi,60000h
 mov eax,0
-mov ecx,1000
+mov ecx,1000h
 repe stosd
 mov esi,folderFN
-mov edi,60000h
+mov edi,70000h
 call sys_loadfile ;add number of sectors returned for loadfile function
 pop ecx
 mov dword [directoryCluster],ecx
 mov ecx,dword [numOfSectors]
 imul ecx,200h
 mov dword [directorySize],ecx
-mov esi,60000h
+mov esi,70000h
 mov edi,disk_buffer
 repe movsb
 mov byte [folderLoaded],1
@@ -716,7 +822,6 @@ mov word [Y],461
 mov esi,downspr
 mov bl,1
 call sys_dispsprite
-mov dword [directorySize],1c00h
 loadnewfolder:
 mov esi,disk_buffer
 mov ecx,dword [directorySize]
@@ -957,5 +1062,17 @@ db 1,0,0,0,1,0,0,0,0,1,2
 db 1,0,0,1,1,1,0,0,0,1,2
 db 1,0,0,0,1,0,0,0,0,1,2
 db 1,0,0,0,1,1,1,1,1,1,2
+db 1,0,0,0,0,0,0,0,0,1,2
+db 1,1,1,1,1,1,1,1,1,1,3
+
+warnspr:
+db 0,0,0,0,0,0,0,0,0,0,2
+db 0,0,0,0,1,1,0,0,0,0,2
+db 0,0,0,1,0,0,1,0,0,0,2
+db 0,0,0,1,1,1,1,0,0,0,2
+db 0,0,1,0,1,1,0,1,0,0,2
+db 0,0,1,0,1,1,0,1,0,0,2
+db 0,1,0,0,0,0,0,0,1,0,2
+db 0,1,0,0,1,1,0,0,1,0,2
 db 1,0,0,0,0,0,0,0,0,1,2
 db 1,1,1,1,1,1,1,1,1,1,3

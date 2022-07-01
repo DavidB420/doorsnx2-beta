@@ -2085,6 +2085,9 @@ program equ 50000h
 disk_buffer equ 40000h
 fat equ 0ac00h
 
+sys_reloadfolder: ;we have starting cluster, use that to find rest. Also add LFN support to delete first.
+ret
+
 sys_loadfile:
 mov byte [loadsuccess],0
 mov dword [numOfSectors],0
@@ -2188,7 +2191,7 @@ jb loadnextclust
 donereadsectorfat12:
 clc
 mov eax,dword [fileSize]
-mov dword [directoryCluster],19
+;mov dword [directoryCluster],19
 ret
 
 sys_overwrite:
@@ -2493,7 +2496,7 @@ sys_deletefile:
 mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
-mov eax,19
+mov eax,dword [directoryCluster]
 mov edi,disk_buffer
 mov ecx,14
 mov dx,0
