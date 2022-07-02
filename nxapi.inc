@@ -176,6 +176,11 @@ sys_displayfatfn equ 300c7h
 ;OUT: ECX = Number of file names
 sys_numoffatfn equ 300cch
 
+;sys_reloadfolder
+;Reloads contents of directory
+;IN: AX = Starting cluster, EDI = location to save directory
+sys_reloadfolder equ 300d9h
+
 ;buttonornot byte
 buttonornot equ 3002dh
 

@@ -56,6 +56,7 @@ jmp sys_displayfatfn
 jmp sys_numoffatfn
 numOfSectors dd 0
 directoryCluster dd 19
+jmp sys_reloadfolder
 
 sys_main:
 mov dword [vidmem],eax
@@ -2085,7 +2086,17 @@ program equ 50000h
 disk_buffer equ 40000h
 fat equ 0ac00h
 
-sys_reloadfolder: ;we have starting cluster, use that to find rest. Also add LFN support to delete first.
+sys_reloadfolder:
+cmp ax,19
+je reloadroot
+sub ax,31
+push edi
+jmp reloadfolderhere
+reloadroot:
+call sys_getrootdirectory
+mov esi,disk_buffer
+mov ecx,1c00h
+repe movsb
 ret
 
 sys_loadfile:
@@ -2132,6 +2143,7 @@ mov eax,dword [edi+1ch]
 mov dword [fileSize],eax
 pop eax
 mov ax,word [edi+1Ah]
+reloadfolderhere:
 mov word [cluster],ax
 add word [cluster],31
 push ax
@@ -2530,7 +2542,17 @@ and eax,0xffff
 add edi,eax
 mov byte [edi],229
 push edi
-mov eax,19
+sub edi,15h
+loopclearlfn:
+cmp byte [edi],0x0f
+jne doneloopclearlfn
+mov byte [edi-0bh],229
+sub edi,20h
+jmp loopclearlfn
+doneloopclearlfn:
+pop edi
+push edi
+mov eax,dword [directoryCluster]
 mov edi,disk_buffer
 mov ecx,14
 mov dx,1
@@ -3704,6 +3726,8 @@ mov al,byte [esi]
 and al,0x0f
 cmp al,1
 jne nextrootentry
+cmp al,0xe5
+je nextrootentry
 cmp byte [esi+2bh],0x0f
 je nextrootentry
 dec ecx

@@ -227,10 +227,17 @@ jmp deleteloop
 
 recursivedelete:
 mov dword [navigateend],donerecursivedelete
+mov byte [viewerEnabled],0
 call navigatetofile
 donerecursivedelete:
-mov esi,fileFN
 call sys_deletefile
+mov ax,word [directoryCluster]
+mov edi,60000h
+call sys_reloadfolder
+mov esi,60000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
 ret
 
 navigatetofile:
@@ -243,16 +250,24 @@ je donenavigatetofile
 mov ax,word [selectVal]
 add ax,word [startVal]
 movzx ecx,ax
+mov word [X],700
 call sys_displayfatfn
 cmp al,1
 jne skiplfn2
 add esi,32
 skiplfn2:
+cmp byte [viewerEnabled],0
+je skipending
 cmp byte [esi+0bh],10h
 je donenavigatetofile
 cmp byte [esi+0bh],16h
 je donenavigatetofile
+skipending:
 mov dword [esival],esi
+cmp byte [esi+0bh],10h
+je savefolder
+cmp byte [esi+0bh],16h
+je savefolder
 mov edi,fileFN
 mov ecx,8
 loopsavesfn:
@@ -268,11 +283,24 @@ mov al,'.'
 stosb
 mov ecx,3
 repe movsb
+mov esi,fileFN
+ret
+savefolder:
+mov edi,folderFN
+mov al,' '
+mov ecx,11
+repe stosb
+mov edi,folderFN
+mov ecx,9
+repe movsb
+mov esi,folderFN
 ret
 donenavigatetofile:
 jmp dword [navigateend]
+viewerEnabled db 0
 
 viewersub:
+mov byte [viewerEnabled],1
 mov dword [navigateend],doneviewersub2
 call navigatetofile
 mov esi,fileFN
