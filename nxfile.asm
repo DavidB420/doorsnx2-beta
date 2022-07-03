@@ -189,6 +189,7 @@ mov esi,60000h
 mov edi,disk_buffer
 mov ecx,dword [directorySize]
 repe movsb
+canceldeletefile:
 mov esi,titleString
 call sys_setupScreen
 call sys_getoldlocation
@@ -221,7 +222,7 @@ cmp word [mouseY],229
 jle s32
 cmp word [mouseY],250
 jg s32
-jmp donedeletefile
+jmp canceldeletefile
 s32:
 jmp deleteloop
 
@@ -229,9 +230,15 @@ recursivedelete:
 mov dword [navigateend],donerecursivedelete
 mov byte [viewerEnabled],0
 call navigatetofile
-donerecursivedelete:
+mov edi,dword [esival]
+cmp byte [edi+0bh],10h
+je clearoutfolder
+cmp byte [edi+0bh],16h
+je clearoutfolder
+doneclearoutfolder:
 call sys_deletefile
-mov ax,word [directoryCluster]
+donerecursivedelete:
+mov eax,dword [directoryCluster]
 mov edi,60000h
 call sys_reloadfolder
 mov esi,60000h
@@ -239,6 +246,56 @@ mov edi,disk_buffer
 mov ecx,dword [directorySize]
 repe movsb
 ret
+clearoutfolder:
+mov eax,dword [directoryCluster]
+mov dword [oldCluster],eax
+mov esi,dword [esival]
+movzx eax,word [esi+26]
+push eax
+mov esi,folderFN
+mov edi,60000h
+call sys_loadfile
+pop eax
+mov dword [directoryCluster],eax
+mov ecx,dword [numOfSectors]
+imul ecx,200h
+mov dword [directorySize],ecx
+mov esi,60000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
+mov word [selectVal],0
+mov word [startVal],0
+call sys_numoffatfn
+loopclearoutfolder:
+push ecx
+mov eax,dword [directoryCluster] ;replace standard load in load, delete, write, etc. with reload
+add eax,31
+mov edi,60000h
+call sys_reloadfolder
+mov esi,60000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
+mov word [Y],65535
+call navigatetofile
+mov esi,fileFN
+call sys_deletefile
+cli
+jmp $
+pop ecx
+mov eax,dword [directoryCluster]
+add eax,31
+mov edi,60000h
+call sys_reloadfolder
+inc word [selectVal]
+loop loopclearoutfolder
+mov eax,dword [oldCluster]
+mov dword [directoryCluster],eax
+cli
+jmp $
+jmp donerecursivedelete
+oldCluster dd 0
 
 navigatetofile:
 mov esi,disk_buffer

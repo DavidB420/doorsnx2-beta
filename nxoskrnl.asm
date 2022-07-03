@@ -2108,11 +2108,13 @@ call sys_makefnfat12
 pop edi
 push edi
 mov eax,dword [directoryCluster]
+mov edi,102c0h
+call sys_reloadfolder
+mov esi,102c0h
+mov ecx,dword [numOfSectors]
+imul ecx,200h
 mov edi,disk_buffer
-mov ecx,14
-mov dx,0
-mov byte [selecteddrive],0
-call readwritesectors
+repe movsb
 mov edi,disk_buffer
 mov esi,fat12fn
 mov bx,0
@@ -2229,12 +2231,14 @@ mov dword [fileSize],eax
 push ebx
 push esi
 pushad
-mov eax,19
+mov eax,dword [directoryCluster]
+mov edi,102c0h
+call sys_reloadfolder
+mov esi,102c0h
+mov ecx,dword [numOfSectors]
+imul ecx,200h
 mov edi,disk_buffer
-mov ecx,14
-mov dx,0
-mov byte [selecteddrive],0
-call readwritesectors
+repe movsb
 popad
 pop esi
 call sys_createfile
@@ -2509,11 +2513,13 @@ mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
 mov eax,dword [directoryCluster]
+mov edi,102c0h
+call sys_reloadfolder
+mov esi,102c0h
+mov ecx,dword [numOfSectors]
+imul ecx,200h
 mov edi,disk_buffer
-mov ecx,14
-mov dx,0
-mov byte [selecteddrive],0
-call readwritesectors
+repe movsb
 mov edi,disk_buffer
 mov esi,fat12fn
 mov bx,0
@@ -2618,7 +2624,16 @@ push edi
 mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
-call sys_getrootdirectory
+pusha
+mov eax,dword [directoryCluster]
+mov edi,102c0h
+call sys_reloadfolder
+mov esi,102c0h
+mov ecx,dword [numOfSectors]
+imul ecx,200h
+mov edi,disk_buffer
+repe movsb
+popa
 mov edi,disk_buffer
 mov esi,fat12fn
 mov bx,0
