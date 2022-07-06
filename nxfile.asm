@@ -139,7 +139,7 @@ jmp mainLoop
 
 deletefile:
 cmp byte [itemSelected],0
-je donedeletefile
+je canceldeletefile
 mov ax,125
 mov bx,175
 mov cx,575

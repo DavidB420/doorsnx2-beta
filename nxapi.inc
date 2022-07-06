@@ -178,7 +178,7 @@ sys_numoffatfn equ 300cch
 
 ;sys_reloadfolder
 ;Reloads contents of directory
-;IN: AX = Starting cluster, EDI = location to save directory
+;IN: EAX = Starting cluster, EDI = location to save directory
 sys_reloadfolder equ 300d9h
 
 ;buttonornot byte

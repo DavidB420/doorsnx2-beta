@@ -2113,6 +2113,7 @@ call sys_reloadfolder
 mov esi,102c0h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
+mov dword [folderSize],ecx
 mov edi,disk_buffer
 repe movsb
 mov edi,disk_buffer
@@ -2162,8 +2163,13 @@ push edi
 movzx eax,word [cluster]
 mov ecx,1
 mov dx,0
+cmp byte [saveinsteadofload],0
+je skipincrementdx2
+inc dx
+skipincrementdx2:
 mov byte [selecteddrive],0
 call readwritesectors
+inc dword [numOfSectors]
 sub dword [cluster],31
 pop edi
 ;mov ebp,0
@@ -2189,14 +2195,18 @@ mov word [cluster],dx
 add edi,512
 add word [cluster],31
 movzx eax,word [cluster]
-inc dword [numOfSectors]
 mov ecx,1
 mov dx,0
+cmp byte [saveinsteadofload],0
+je skipincrementdx
+inc dx
+skipincrementdx:
 push edi
 mov byte [selecteddrive],0
 call readwritesectors
 pop edi
 jc donereadsectorfat12
+inc dword [numOfSectors]
 sub word [cluster],31
 mov dx,word [cluster]
 mov ax,dx
@@ -2204,6 +2214,7 @@ cmp dx,0ff0h
 jb loadnextclust
 donereadsectorfat12:
 clc
+mov byte [saveinsteadofload],0
 mov eax,dword [fileSize]
 ;mov dword [directoryCluster],19
 ret
@@ -2225,11 +2236,7 @@ call kbread
 donewritw2:
 ret
 
-
-sys_writefile:
-mov dword [fileSize],eax
-push ebx
-push esi
+loaddirectory:
 pushad
 mov eax,dword [directoryCluster]
 mov edi,102c0h
@@ -2237,9 +2244,19 @@ call sys_reloadfolder
 mov esi,102c0h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
+mov dword [folderSize],ecx
 mov edi,disk_buffer
 repe movsb
+mov dword [edi],0
 popad
+ret
+
+sys_writefile:
+mov dword [numOfSectors],0
+mov dword [fileSize],eax
+push ebx
+push esi
+call loaddirectory
 pop esi
 call sys_createfile
 pop ebx
@@ -2274,51 +2291,8 @@ mov dx,0
 mov byte [selecteddrive],0
 call readwritesectors
 popad
-mov esi,disk_buffer+3
 movzx ecx,word [clustersneeded]
-mov ebx,2
-mov edx,0
-findcluster:
-lodsw
-and ax,0fffh
-jz foundeven
-moreodd:
-inc bx
-dec esi
-lodsw
-shr ax,4
-or ax,ax
-jz foundodd
-moreeven:
-inc bx
-jmp findcluster
-foundeven:
-push esi
-mov esi,freeclusts
-add esi,edx
-mov word [esi],bx
-pop esi
-dec ecx
-cmp ecx,0
-je donefind
-inc dx
-inc dx
-jmp moreodd
-foundodd:
-push esi
-mov esi,freeclusts
-add esi,edx
-mov word [esi],bx
-pop esi
-dec ecx
-cmp ecx,0
-je donefind
-inc dx
-inc dx
-jmp moreeven
-donefind:
-mov ecx,0
-mov word [count],1
+call findavailableclusters
 chainloop:
 movzx eax,word [count]
 cmp ax,word [clustersneeded]
@@ -2411,14 +2385,7 @@ inc cx
 inc cx
 jmp saveloop
 writerootentry:
-pushad
-mov eax,19
-mov edi,disk_buffer
-mov ecx,14
-mov dx,0
-mov byte [selecteddrive],0
-call readwritesectors
-popad
+call loaddirectory
 mov edi,disk_buffer
 mov esi,fat12fn
 mov bx,0
@@ -2447,12 +2414,7 @@ mov ax,word [freeclusts]
 mov word [edi+26],ax
 mov dword ecx,[fileSize]
 mov dword [edi+28],ecx
-mov eax,19
-mov edi,disk_buffer
-mov ecx,14
-mov dx,1
-mov byte [selecteddrive],0
-call readwritesectors
+call sys_overwritefolder
 finishwrite:
 ret
 location dd 0
@@ -2463,8 +2425,8 @@ count dw 0
 sys_createfile:
 mov edi,fat12fn
 call sys_makefnfat12
-mov edi,disk_buffer
-mov ecx,224
+mov edi,disk_buffer ;subtract difference between old and new edi value to get new file size, then use that to determine if we need a new cluster.
+mov ecx,0xffff
 findemptyrootentry:
 mov byte al,[edi]
 cmp al,0
@@ -2474,6 +2436,32 @@ je foundempty
 add edi,32
 loop findemptyrootentry
 foundempty:
+cmp dword [directoryCluster],19
+je skipaddnewcluster
+push edi
+sub edi,disk_buffer
+cmp edi,dword [folderSize]
+jl doneaddnewcluster
+mov eax,edi
+mov edx,0
+mov edi,200h
+div edi
+mov ecx,eax
+push ecx
+call addadditionalcluster
+call loaddirectory
+mov eax,0
+mov edi,disk_buffer
+sub dword [folderSize],200h
+mov ecx,dword [folderSize]
+add edi,ecx
+sub edi,200h
+pop ecx
+imul ecx,200h
+repe stosb
+doneaddnewcluster:
+pop edi
+skipaddnewcluster:
 mov esi,fat12fn
 mov ecx,11
 cld
@@ -2500,15 +2488,11 @@ mov byte [edi+28],0
 mov byte [edi+29],0
 mov byte [edi+30],0
 mov byte [edi+31],0
-mov eax,19
-mov edi,disk_buffer
-mov ecx,14
-mov dx,1
-mov byte [selecteddrive],0
-call readwritesectors
+call sys_overwritefolder
 ret
 
 sys_deletefile:
+mov dword [numOfSectors],0
 mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
@@ -2518,6 +2502,7 @@ call sys_reloadfolder
 mov esi,102c0h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
+mov dword [folderSize],ecx
 mov edi,disk_buffer
 repe movsb
 mov edi,disk_buffer
@@ -2557,14 +2542,13 @@ sub edi,20h
 jmp loopclearlfn
 doneloopclearlfn:
 pop edi
-push edi
-mov eax,dword [directoryCluster]
+pusha
+call sys_overwritefolder
 mov edi,disk_buffer
-mov ecx,14
-mov dx,1
-mov byte [selecteddrive],0
-call readwritesectors
-pop edi
+mov esi,102c0h
+mov ecx,dword [folderSize]
+repe movsb
+popa
 mov ax,word [edi+26]
 mov word [tmpcluster],ax
 push ax
@@ -2617,6 +2601,32 @@ call readwritesectors
 ret
 
 tmpcluster dw 0
+folderSize dd 0
+
+sys_overwritefolder:
+cmp dword [directoryCluster],19
+je overwriteroot ;load previous folder using .., delete the folder, then recreate the folder while making sure to save the previous directory entries
+mov byte [saveinsteadofload],1
+mov edi,102c0h
+mov esi,disk_buffer
+mov ecx,dword [folderSize]
+repe movsb
+mov edi,102c0h
+push edi
+mov eax,dword [directoryCluster]
+sub eax,31
+jmp reloadfolderhere ;also consider calculating which cluster directory entry is in. if we need another, grab one.
+overwriteroot:
+pusha
+mov eax,19
+mov edi,disk_buffer
+mov ecx,14
+mov dx,1
+mov byte [selecteddrive],0
+call readwritesectors
+popa
+ret
+saveinsteadofload db 0
 
 sys_renamefile:
 push esi
@@ -2676,12 +2686,11 @@ mov ecx,12
 repe movsb
 mov ax,19
 call twelvehts2
-mov eax,19
+call sys_overwritefolder
 mov edi,disk_buffer
-mov ecx,14
-mov dx,1
-mov byte [selecteddrive],0
-call readwritesectors
+mov esi,102c0h
+mov ecx,dword [folderSize]
+repe movsb
 ret
 
 fat12fn2 times 13 db 0
@@ -2989,6 +2998,154 @@ pop esi
 sub esi,edx
 mov ecx,11
 repe movsb
+ret
+
+addadditionalcluster:
+pushad
+mov eax,1
+mov edi,disk_buffer
+mov ecx,9
+mov dx,0
+mov byte [selecteddrive],0
+call readwritesectors
+popad
+push ecx
+call findavailableclusters
+movzx eax,word [directoryCluster]
+sub eax,31
+gotolastclust:
+mov dword [oldcluster],eax
+mov ecx,eax
+mov edx,eax
+shr edx,1
+add ecx,edx
+mov ebx,disk_buffer
+add ebx,ecx
+mov dx,word [ebx]
+test ax,1
+jnz odd3
+even3:
+and dx,0fffh
+jmp endload2
+odd3:
+shr dx,4
+endload2:
+mov ax,dx
+mov word [cluster],dx
+mov dx,word [cluster]
+mov ax,dx
+cmp dx,0ff0h
+jb gotolastclust
+pop ecx
+loopsavecluster:
+mov ebx,freeclusts
+add bx,word [clustercount]
+movzx ebx,word [ebx]
+startsavecluster:
+push ebx
+mov eax,dword [oldcluster]
+mov ebx,2
+mov edx,0
+div ebx
+pop ebx
+mov eax,dword [oldcluster]
+mov esi,disk_buffer
+push ecx
+push edx
+mov ecx,eax
+mov edx,eax
+shr edx,1
+add esi,ecx
+add esi,edx
+pop edx
+pop ecx
+movzx edi,word [esi]
+cmp edx,1
+je odd4
+and edi,0xf000
+mov eax,ebx
+and eax,0xfff
+or edi,eax
+mov word [esi],di
+jmp skipodd5
+odd4:
+and edi,0x0f
+mov eax,ebx
+shl eax,4
+or edi,eax
+mov word [esi],di
+skipodd5:
+mov eax,freeclusts
+add ax,word [clustercount]
+movzx eax,word [eax]
+mov dword [oldcluster],eax
+inc word [clustercount]
+dec ecx
+cmp ecx,0
+jg loopsavecluster
+cmp ebx,0xff0
+je donesavecluster
+mov word [clustercount],0
+mov ebx,0xff0
+jmp startsavecluster
+donesavecluster:
+pushad
+mov eax,1
+mov edi,disk_buffer
+mov ecx,9
+mov dx,1
+mov byte [selecteddrive],0
+call readwritesectors
+popad
+ret
+clustercount dw 0
+oldcluster dd 0
+
+findavailableclusters:
+mov esi,disk_buffer+3
+mov ebx,2
+mov edx,0
+findcluster:
+lodsw
+and ax,0fffh
+jz foundeven
+moreodd:
+inc bx
+dec esi
+lodsw
+shr ax,4
+or ax,ax
+jz foundodd
+moreeven:
+inc bx
+jmp findcluster
+foundeven:
+push esi
+mov esi,freeclusts
+add esi,edx
+mov word [esi],bx
+pop esi
+dec ecx
+cmp ecx,0
+je donefind
+inc dx
+inc dx
+jmp moreodd
+foundodd:
+push esi
+mov esi,freeclusts
+add esi,edx
+mov word [esi],bx
+pop esi
+dec ecx
+cmp ecx,0
+je donefind
+inc dx
+inc dx
+jmp moreeven
+donefind:
+mov ecx,0
+mov word [count],1
 ret
 
 twelvehts:
