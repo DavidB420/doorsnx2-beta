@@ -249,6 +249,8 @@ ret
 clearoutfolder:
 mov eax,dword [directoryCluster]
 mov dword [oldCluster],eax
+mov eax,dword [directorySize]
+mov dword [oldSize],eax
 mov esi,dword [esival]
 movzx eax,word [esi+26]
 push eax
@@ -256,6 +258,7 @@ mov esi,folderFN
 mov edi,60000h
 call sys_loadfile
 pop eax
+add eax,31
 mov dword [directoryCluster],eax
 mov ecx,dword [numOfSectors]
 imul ecx,200h
@@ -264,38 +267,62 @@ mov esi,60000h
 mov edi,disk_buffer
 mov ecx,dword [directorySize]
 repe movsb
+mov dword [edi],0
 mov word [selectVal],0
 mov word [startVal],0
+mov esi,disk_buffer
+mov ecx,dword [directorySize]
 call sys_numoffatfn
 loopclearoutfolder:
 push ecx
-mov eax,dword [directoryCluster] ;replace standard load in load, delete, write, etc. with reload
-add eax,31
+mov eax,dword [directoryCluster] ;use breakpoints to find out wtf is going on
 mov edi,60000h
 call sys_reloadfolder
 mov esi,60000h
 mov edi,disk_buffer
 mov ecx,dword [directorySize]
 repe movsb
-mov word [Y],65535
+mov dword [edi],0
 call navigatetofile
-mov esi,fileFN
+cmp esi,folderFN
+jne recursefunction
+push dword [esival]
+push dword [directoryCluster]
+push dword [directorySize]
+push dword [oldSize]
+push dword [oldCluster]
+pushad
+;call recursivedelete
+popad
+pop dword [oldCluster]
+pop dword [oldSize]
+pop dword [directorySize]
+pop dword [directoryCluster]
+recursefunction:
+;mov esi,fileFN
+pushad
 call sys_deletefile
-cli
-jmp $
+mov al,0
+mov edi,fileFN
+mov ecx,13
+repe stosb
+popad
 pop ecx
-mov eax,dword [directoryCluster]
-add eax,31
-mov edi,60000h
-call sys_reloadfolder
-inc word [selectVal]
-loop loopclearoutfolder
+dec ecx
+cmp ecx,0
+jg loopclearoutfolder
 mov eax,dword [oldCluster]
 mov dword [directoryCluster],eax
-cli
-jmp $
+mov eax,dword [oldSize]
+mov dword [directorySize],eax
+cmp byte [skipreturn],1
+jne skipreturnsub
+ret
+skipreturnsub:
 jmp donerecursivedelete
 oldCluster dd 0
+oldSize dd 0
+skipreturn db 0
 
 navigatetofile:
 mov esi,disk_buffer
@@ -308,6 +335,7 @@ mov ax,word [selectVal]
 add ax,word [startVal]
 movzx ecx,ax
 mov word [X],700
+mov edx,dword [directorySize]
 call sys_displayfatfn
 cmp al,1
 jne skiplfn2
@@ -615,6 +643,7 @@ add ax,word [startVal]
 movzx ecx,ax
 mov word [X],88
 mov word [Color],0
+mov edx,dword [directorySize]
 call sys_displayfatfn
 cmp al,1
 jne notlfn
@@ -929,6 +958,7 @@ loopreadfns:
 cmp cx,word [numOfFNs]
 jge doneloopreadfns
 mov word [X],102
+mov edx,dword [directorySize]
 call sys_displayfatfn
 dispico:
 cmp al,1

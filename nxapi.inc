@@ -166,7 +166,7 @@ sys_returnnumberofdrives equ 300c2h
 
 ;sys_displayfatfn
 ;Displays FAT file name
-;IN: Color word = Color, X word = X coordinate, Y word = Y coordinate, ECX = Index of FN to display
+;IN: Color word = Color, X word = X coordinate, Y word = Y coordinate, ECX = Index of FN to display, EDX = Length of directory buffer
 ;OUT: ESI = Start of displayed file name, AL = LFN (1) or SFN (0)
 sys_displayfatfn equ 300c7h
 

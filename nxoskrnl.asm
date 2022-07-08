@@ -2598,6 +2598,10 @@ mov ecx,9
 mov dx,1
 mov byte [selecteddrive],0
 call readwritesectors
+mov edi,fat12fn
+mov ecx,13
+mov al,0
+repe stosb
 ret
 
 tmpcluster dw 0
@@ -2605,7 +2609,7 @@ folderSize dd 0
 
 sys_overwritefolder:
 cmp dword [directoryCluster],19
-je overwriteroot ;load previous folder using .., delete the folder, then recreate the folder while making sure to save the previous directory entries
+je overwriteroot 
 mov byte [saveinsteadofload],1
 mov edi,102c0h
 mov esi,disk_buffer
@@ -2615,7 +2619,7 @@ mov edi,102c0h
 push edi
 mov eax,dword [directoryCluster]
 sub eax,31
-jmp reloadfolderhere ;also consider calculating which cluster directory entry is in. if we need another, grab one.
+jmp reloadfolderhere
 overwriteroot:
 pusha
 mov eax,19
@@ -3883,8 +3887,9 @@ out 0x21,al
 pop ax
 mov esi,disk_buffer
 mov ebx,0bh
+add edx,disk_buffer
 loopfindfn:
-cmp esi,41C00h
+cmp esi,edx
 je nolfnfound
 cmp byte [esi+ebx],0x0f
 je foundpossiblelfn
