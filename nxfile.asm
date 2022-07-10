@@ -231,20 +231,34 @@ mov dword [navigateend],donerecursivedelete
 mov byte [viewerEnabled],0
 call navigatetofile
 mov edi,dword [esival]
+push esi
+push edi
+push ecx
+mov edi,oldFN
+mov esi,folderFN
+mov ecx,13
+repe movsb
+pop ecx
+pop edi
+pop esi
 cmp byte [edi+0bh],10h
 je clearoutfolder
 cmp byte [edi+0bh],16h
 je clearoutfolder
 doneclearoutfolder:
+push esi
+push edi
+push ecx
+mov edi,folderFN
+mov esi,oldFN
+mov ecx,13
+repe movsb
+pop ecx
+pop edi
+pop esi
 call sys_deletefile
 donerecursivedelete:
-mov eax,dword [directoryCluster]
-mov edi,60000h
-call sys_reloadfolder
-mov esi,60000h
-mov edi,disk_buffer
-mov ecx,dword [directorySize]
-repe movsb
+call reloadfolderafterdelete
 ret
 clearoutfolder:
 mov eax,dword [directoryCluster]
@@ -273,15 +287,11 @@ mov word [startVal],0
 mov esi,disk_buffer
 mov ecx,dword [directorySize]
 call sys_numoffatfn
+cmp ecx,0
+je doneloopclearoutfolder
 loopclearoutfolder:
 push ecx
-mov eax,dword [directoryCluster] ;use breakpoints to find out wtf is going on
-mov edi,60000h
-call sys_reloadfolder
-mov esi,60000h
-mov edi,disk_buffer
-mov ecx,dword [directorySize]
-repe movsb
+call reloadfolderafterdelete
 mov dword [edi],0
 call navigatetofile
 cmp esi,folderFN
@@ -291,13 +301,26 @@ push dword [directoryCluster]
 push dword [directorySize]
 push dword [oldSize]
 push dword [oldCluster]
+push dword [folderFN]
+push dword [folderFN+4]
+push dword [folderFN+8]
+push dword [folderFN+12]
+mov byte [skipreturn],1 ;load folder before clearing it out!!!
 pushad
-;call recursivedelete
+mov esi,dword [esival]
+call clearoutfolder
 popad
+mov byte [skipreturn],0
+pop dword [folderFN+12]
+pop dword [folderFN+8]
+pop dword [folderFN+4]
+pop dword [folderFN]
 pop dword [oldCluster]
 pop dword [oldSize]
 pop dword [directorySize]
 pop dword [directoryCluster]
+pop dword [esival]
+call reloadfolderafterdelete
 recursefunction:
 ;mov esi,fileFN
 pushad
@@ -311,6 +334,7 @@ pop ecx
 dec ecx
 cmp ecx,0
 jg loopclearoutfolder
+doneloopclearoutfolder:
 mov eax,dword [oldCluster]
 mov dword [directoryCluster],eax
 mov eax,dword [oldSize]
@@ -319,10 +343,25 @@ cmp byte [skipreturn],1
 jne skipreturnsub
 ret
 skipreturnsub:
-jmp donerecursivedelete
+call reloadfolderafterdelete
+mov esi,folderFN
+jmp doneclearoutfolder
 oldCluster dd 0
 oldSize dd 0
 skipreturn db 0
+oldFN times 13 db 0
+
+reloadfolderafterdelete:
+pushad
+mov eax,dword [directoryCluster] ;use breakpoints to find out wtf is going on
+mov edi,60000h
+call sys_reloadfolder
+mov esi,60000h
+mov edi,disk_buffer
+mov ecx,dword [directorySize]
+repe movsb
+popad
+ret
 
 navigatetofile:
 mov esi,disk_buffer
