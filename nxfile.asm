@@ -6,6 +6,8 @@ org 50000h
 mov esi,titleString
 call sys_setupScreen
 
+mov byte [6ffffh],0
+
 call sys_getrootdirectory
 
 call drawFirstScreen
@@ -30,7 +32,7 @@ endVal dw 0
 prevVal dw 30
 selectVal dw 0
 itemSelected db 0
-viewerpos dd 70000h
+viewerpos dd 80000h
 navigateend dd 0
 
 lbuttonclick:
@@ -135,7 +137,22 @@ cmp word [mouseY],27
 jg s7
 call deletefile
 s7:
+cmp word [mouseX],599
+jle s8
+cmp word [mouseX],615
+jg s8
+cmp word [mouseY],13
+jle s8
+cmp word [mouseY],27
+jg s8
+call renamefile
+s8:
 jmp mainLoop
+
+renamefile:
+mov al,0xfe
+out 0x64,al
+ret
 
 deletefile:
 cmp byte [itemSelected],0
@@ -185,11 +202,14 @@ mov dword [keybaddress],sys_windowloop
 mov dword [bgtaskaddress],sys_nobgtasks
 jmp sys_windowloop
 donedeletefile:
-mov esi,60000h
-mov edi,disk_buffer
-mov ecx,dword [directorySize]
-repe movsb
+;mov esi,60000h
+;mov edi,disk_buffer
+;mov ecx,dword [directorySize]
+;repe movsb
+call reloadfolderafterdelete
 canceldeletefile:
+mov word [startVal],0	
+mov word [numOfFNs],0
 mov esi,titleString
 call sys_setupScreen
 call sys_getoldlocation
@@ -228,6 +248,7 @@ jmp deleteloop
 
 recursivedelete:
 mov dword [navigateend],donerecursivedelete
+mov word [Y],0
 mov byte [viewerEnabled],0
 call navigatetofile
 mov edi,dword [esival]
@@ -241,6 +262,7 @@ repe movsb
 pop ecx
 pop edi
 pop esi
+mov word [skipreturn],0
 cmp byte [edi+0bh],10h
 je clearoutfolder
 cmp byte [edi+0bh],16h
@@ -261,6 +283,8 @@ donerecursivedelete:
 call reloadfolderafterdelete
 ret
 clearoutfolder:
+push word [selectVal]
+push word [startVal]
 mov eax,dword [directoryCluster]
 mov dword [oldCluster],eax
 mov eax,dword [directorySize]
@@ -305,12 +329,13 @@ push dword [folderFN]
 push dword [folderFN+4]
 push dword [folderFN+8]
 push dword [folderFN+12]
+push word [skipreturn]
 mov byte [skipreturn],1 ;load folder before clearing it out!!!
 pushad
 mov esi,dword [esival]
 call clearoutfolder
 popad
-mov byte [skipreturn],0
+pop word [skipreturn]
 pop dword [folderFN+12]
 pop dword [folderFN+8]
 pop dword [folderFN+4]
@@ -339,16 +364,20 @@ mov eax,dword [oldCluster]
 mov dword [directoryCluster],eax
 mov eax,dword [oldSize]
 mov dword [directorySize],eax
-cmp byte [skipreturn],1
+pop word [startVal]
+pop word [selectVal]
+cmp word [skipreturn],1
 jne skipreturnsub
 ret
 skipreturnsub:
+mov dword [directoryCluster],19
+mov dword [directorySize],1c00h
 call reloadfolderafterdelete
 mov esi,folderFN
 jmp doneclearoutfolder
 oldCluster dd 0
 oldSize dd 0
-skipreturn db 0
+skipreturn dw 0
 oldFN times 13 db 0
 
 reloadfolderafterdelete:
@@ -371,7 +400,7 @@ repe movsb
 cmp byte [itemSelected],0
 je donenavigatetofile
 mov ax,word [selectVal]
-add ax,word [startVal]
+;add ax,word [startVal]
 movzx ecx,ax
 mov word [X],700
 mov edx,dword [directorySize]
@@ -428,7 +457,7 @@ mov byte [viewerEnabled],1
 mov dword [navigateend],doneviewersub2
 call navigatetofile
 mov esi,fileFN
-mov edi,70000h
+mov edi,80000h
 call sys_loadfile
 cmp byte [loadsuccess],1
 je doneviewersub
@@ -479,8 +508,10 @@ mov ecx,dword [directorySize]
 repe movsb
 movzx ecx,word [fileSize]
 mov eax,0
-mov edi,70000h
+mov edi,80000h
 repe stosb
+mov word [startVal],0	
+mov word [numOfFNs],0
 mov esi,titleString
 call sys_setupScreen
 call sys_getoldlocation
@@ -488,7 +519,7 @@ call drawFirstScreen
 mov byte [state],0
 mov byte [itemSelected],0
 mov word [selectVal],0
-mov dword [viewerpos],70000h
+mov dword [viewerpos],80000h
 call sys_mouseemuenable
 ret
 fileFN times 13 db 0
@@ -538,7 +569,7 @@ jmp viewloop
 goup:
 mov byte [downornot],0
 mov esi,dword [viewerpos]
-cmp esi,70000h
+cmp esi,80000h
 je viewloop
 mov word [Color],0xffff
 mov word [X],1
@@ -599,6 +630,10 @@ downornot db 0
 upfolder:
 cmp dword [disk_buffer+32],538979886
 jne doneupfolder
+mov esi,dword [folderAddress]
+dec esi
+call gobacktozerobyte
+mov dword [folderAddress],esi
 push afterfolderopen
 pusha
 push word [X]
@@ -683,7 +718,11 @@ movzx ecx,ax
 mov word [X],88
 mov word [Color],0
 mov edx,dword [directorySize]
+mov byte [saveataddress],1
+mov edi,dword [folderAddress]
 call sys_displayfatfn
+mov byte [saveataddress],0
+mov dword [folderAddress],edi
 cmp al,1
 jne notlfn
 add esi,32
@@ -694,11 +733,18 @@ cmp byte [esi+0bh],16h
 je isafolder
 jmp notfolder
 isafolder:
+call displayfoldername
 movzx ecx,word [esi+26]
 add ecx,31
 cmp ecx,31
 jne skiproot
 mov byte [buttonornot],1
+mov word [Color],0x0057
+mov ax,132
+mov bx,3
+mov cx,590
+mov dx,10
+call sys_drawbox
 mov word [Color],0xffff
 mov ax,85
 mov bx,30
@@ -733,14 +779,14 @@ mov eax,0
 mov ecx,1000h
 repe stosd
 mov esi,folderFN
-mov edi,70000h
+mov edi,80000h
 call sys_loadfile ;add number of sectors returned for loadfile function
 pop ecx
 mov dword [directoryCluster],ecx
 mov ecx,dword [numOfSectors]
 imul ecx,200h
 mov dword [directorySize],ecx
-mov esi,70000h
+mov esi,80000h
 mov edi,disk_buffer
 repe movsb
 mov byte [folderLoaded],1
@@ -761,6 +807,7 @@ ret
 folderFN times 11 db ' ', '.',0
 folderLoaded db 0
 fat12fn times 13 db 0
+folderAddress dd 70000h
 
 drawFirstScreen:
 mov ax,0
@@ -975,6 +1022,10 @@ mov word [Y],461
 mov esi,downspr
 mov bl,1
 call sys_dispsprite
+cmp dword [directoryCluster],19
+je skipdisplayfoldernameattop
+call displayfoldername
+skipdisplayfoldernameattop:
 loadnewfolder:
 mov esi,disk_buffer
 mov ecx,dword [directorySize]
@@ -990,6 +1041,39 @@ mov word [Color],0
 call listallfns
 ret
 directorySize dd 1c00h
+
+displayfoldername:
+pushad
+mov byte [buttonornot],1
+mov word [Color],0x0057
+mov ax,145
+mov bx,3
+mov cx,590
+mov dx,10
+call sys_drawbox
+mov byte [buttonornot],0
+mov word [X],132
+mov word [Y],3
+mov word [Color],0xffff
+mov dx,'-'
+call sys_printChar
+popad
+pushad
+mov word [X],145
+mov word [Y],3
+mov esi,dword [folderAddress]
+dec esi
+call gobacktozerobyte
+call sys_printString
+popad
+ret
+
+gobacktozerobyte:
+dec esi
+cmp byte [esi],0
+jne gobacktozerobyte
+inc esi
+ret
 
 listallfns:
 mov word [Y],34

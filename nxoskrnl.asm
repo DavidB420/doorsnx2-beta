@@ -57,6 +57,7 @@ jmp sys_numoffatfn
 numOfSectors dd 0
 directoryCluster dd 19
 jmp sys_reloadfolder
+saveataddress db 0
 
 sys_main:
 mov dword [vidmem],eax
@@ -2550,6 +2551,8 @@ mov ecx,dword [folderSize]
 repe movsb
 popa
 mov ax,word [edi+26]
+cmp ax,0
+je zerosectors
 mov word [tmpcluster],ax
 push ax
 mov eax,1
@@ -2598,6 +2601,7 @@ mov ecx,9
 mov dx,1
 mov byte [selecteddrive],0
 call readwritesectors
+zerosectors:
 mov edi,fat12fn
 mov ecx,13
 mov al,0
@@ -2756,6 +2760,13 @@ jmp windowloop
 
 readwritesectors:
 pushad
+mov byte [usbhidenabled],0
+push ax
+mov al,0xba
+out 0x21,al
+mov al,0xff
+out 0xa1,al
+pop ax
 shl byte [selecteddrive],1
 mov esi,driveletter
 push eax
@@ -2872,6 +2883,13 @@ mov eax,dword [eaxval]
 call msdreadwritesector
 skipusbmsdreadwrite:
 donereadwritesectors:
+mov byte [usbhidenabled],1
+push ax
+mov al,0xb8
+out 0x21,al
+mov al,byte [picslave]
+out 0xa1,al
+pop ax
 popad
 ret
 selecteddrive db 0
@@ -3927,7 +3945,14 @@ sub esi,32
 test al,40h
 jz readalfnentry
 nolfnfound:
+cmp byte [saveataddress],1
+jne skipsaveataddr7
+mov byte [edi],0
+skipsaveataddr7:
+inc edi
+mov dword [edival],edi
 popad
+mov edi,dword [edival]
 push ax
 mov al,0xb8
 out 0x21,al
@@ -3947,6 +3972,11 @@ je notvalidchar
 cmp word [X],600
 jg printdots
 call sys_printChar
+cmp byte [saveataddress],1
+jne skipsaveataddr
+mov byte [edi],dl
+inc edi
+skipsaveataddr:
 jmp notvalidchar
 notvalidchar:
 inc esi
@@ -3955,6 +3985,13 @@ pop esi
 ret
 printdots:
 mov dx,'.'
+cmp byte [saveataddress],1
+jne skipsaveataddr2
+mov byte [edi],dl
+mov byte [edi+1],dl
+mov byte [edi+2],dl
+add edi,3
+skipsaveataddr2:
 call sys_printChar
 call sys_printChar
 call sys_printChar
@@ -3982,6 +4019,11 @@ lodsb
 cmp al,' '
 je doneloopdispsfn
 movzx dx,al
+cmp byte [saveataddress],1
+jne skipsaveataddr3
+mov byte [edi],dl
+inc edi
+skipsaveataddr3:
 call sys_printChar
 loop loopdispsfn
 doneloopdispsfn:
@@ -3992,15 +4034,32 @@ cmp byte [esi+0bh],16h
 je nosfnfound
 add esi,8
 mov dx,'.'
+cmp byte [saveataddress],1
+jne skipsaveataddr4
+mov byte [edi],dl
+inc edi
+skipsaveataddr4:
 call sys_printChar
 mov ecx,3
 loopdispsfnext:
 lodsb
 movzx dx,al
+cmp byte [saveataddress],1
+jne skipsaveataddr5
+mov byte [edi],dl
+inc edi
+skipsaveataddr5:
 call sys_printChar
 loop loopdispsfnext
 nosfnfound:
+cmp byte [saveataddress],1
+jne skipsaveataddr6
+mov byte [edi],0
+skipsaveataddr6:
+inc edi
+mov dword [edival],edi
 popad
+mov edi,dword [edival]
 push ax
 mov al,0xb8
 out 0x21,al

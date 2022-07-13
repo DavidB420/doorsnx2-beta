@@ -166,8 +166,8 @@ sys_returnnumberofdrives equ 300c2h
 
 ;sys_displayfatfn
 ;Displays FAT file name
-;IN: Color word = Color, X word = X coordinate, Y word = Y coordinate, ECX = Index of FN to display, EDX = Length of directory buffer
-;OUT: ESI = Start of displayed file name, AL = LFN (1) or SFN (0)
+;IN: Color word = Color, X word = X coordinate, Y word = Y coordinate, ECX = Index of FN to display, EDX = Length of directory buffer, EDI = location to save file name (optional)
+;OUT: ESI = Start of displayed file name, EDI = location after saved file name, AL = LFN (1) or SFN (0)
 sys_displayfatfn equ 300c7h
 
 ;sys_numoffatfn
@@ -201,6 +201,9 @@ keydata equ 3005ah
 
 ;keyormouse byte
 keyormouse equ 300adh
+
+;saveataddress byte
+saveataddress equ 300deh
 
 ;X word
 X equ 30031h
