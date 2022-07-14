@@ -147,7 +147,63 @@ cmp word [mouseY],27
 jg s8
 call renamefile
 s8:
+cmp word [mouseX],559
+jle s9
+cmp word [mouseX],575
+jg s9
+cmp word [mouseY],13
+jle s9
+cmp word [mouseY],27
+jg s9
+call fileinfo
+s9:
 jmp mainLoop
+
+fileinfo:
+cmp byte [itemSelected],0
+je donefileinfo
+mov byte [buttonornot],1
+mov word [Color],0x4A6A
+mov ax,0
+mov bx,120
+mov cx,640
+mov dx,300
+call sys_drawbox
+mov word [Color],0xffff
+mov ax,300
+mov bx,270
+mov cx,340
+mov dx,285
+call sys_drawbox
+mov byte [buttonornot],0
+mov esi,ok
+mov word [X],314
+mov word [Y],273
+mov word [Color],0
+call sys_printString
+mov esi,filetype
+mov word [X],2
+mov word [Y],145
+mov word [Color],0xffff
+call sys_printString
+mov esi,dosFN
+mov word [X],2
+mov word [Y],165
+call sys_printString
+mov esi,fileSizeStr
+mov word [X],2
+mov word [Y],185
+call sys_printString
+mov esi,dateModified
+mov word [X],2
+mov word [Y],205
+call sys_printString
+donefileinfo:
+ret
+filetype db 'File type:     file',0
+dosFN db 'DOS file name:',0
+fileSizeStr db 'File size:',0
+dateModified db 'Date/Time modified:',0
 
 renamefile:
 mov al,0xfe
@@ -579,7 +635,7 @@ mov esi,dword [viewerpos]
 std
 uploop:
 lodsb
-cmp esi,6ffffh
+cmp esi,7ffffh
 je doneuploop
 dec dword [viewerpos]
 cmp al,0x0a
