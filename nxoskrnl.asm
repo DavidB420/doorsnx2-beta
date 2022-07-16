@@ -2098,6 +2098,7 @@ call sys_getrootdirectory
 mov esi,disk_buffer
 mov ecx,1c00h
 repe movsb
+mov dword [numOfSectors],14
 ret
 
 sys_loadfile:
@@ -2259,7 +2260,7 @@ push ebx
 push esi
 call loaddirectory
 pop esi
-call sys_createfile
+call sys_createfile ;first four bytes of directory entry overwritten to zeroes
 pop ebx
 mov dword [location],ebx
 mov edi,freeclusts

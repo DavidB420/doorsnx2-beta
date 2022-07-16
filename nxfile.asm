@@ -183,27 +183,211 @@ mov word [Color],0
 call sys_printString
 mov esi,filetype
 mov word [X],2
-mov word [Y],145
+mov word [Y],155
 mov word [Color],0xffff
 call sys_printString
 mov esi,dosFN
 mov word [X],2
-mov word [Y],165
+mov word [Y],175
 call sys_printString
 mov esi,fileSizeStr
 mov word [X],2
-mov word [Y],185
+mov word [Y],195
 call sys_printString
 mov esi,dateModified
 mov word [X],2
-mov word [Y],205
+mov word [Y],215
 call sys_printString
+mov dword [navigateend],donefileinfo
+mov word [X],2
+mov word [Y],128
+mov word [Color],0xffff
+movzx ecx,word [selectVal]
+mov edx,dword [directorySize]
+mov byte [viewerEnabled],0
+mov byte [saveataddress],1
+mov edi,80000h
+call sys_displayfatfn
+push ax
+push esi
+call checkandaddforlfn
+cmp byte [esi+0bh],10h
+je doneloopfindextension
+cmp byte [esi+0bh],16h
+je doneloopfindextension
+mov byte [saveataddress],0
+mov esi,80000h
+loopfindextension:
+lodsb
+cmp al,'.'
+je skipforfolder
+cmp al,0
+je cantfindextension
+jmp loopfindextension
+doneloopfindextension:
+pusha
+mov byte [buttonornot],1
+mov word [Color],0x4A6A
+mov ax,66
+mov bx,155
+mov cx,200
+mov dx,165
+call sys_drawbox
+mov byte [buttonornot],0
+popa
+mov word [Color],0xffff
+mov esi,folderStr
+skipforfolder:
+mov word [X],66
+mov word [Y],155
+call sys_printString
+cantfindextension:
+pop esi
+pop ax
+call checkandaddforlfn
+mov edi,esi
+mov word [X],90
+mov word [Y],175
+mov ecx,8
+loopprintdossfn:
+lodsb
+cmp al,20h
+je doneloopprintdossfn
+movzx dx,al
+call sys_printChar
+loop loopprintdossfn
+doneloopprintdossfn:
+mov esi,edi
+cmp byte [esi+0bh],10h
+je nosfnfound
+cmp byte [esi+0bh],16h
+je nosfnfound
+add esi,8
+mov dx,'.'
+call sys_printChar
+mov ecx,3
+loopprintdossfnextension:
+lodsb
+movzx dx,al
+call sys_printChar
+loop loopprintdossfnextension
+nosfnfound:
+cmp byte [esi+0bh],10h
+je skipprintfilesize
+cmp byte [esi+0bh],16h
+je skipprintfilesize
+mov eax,dword [edi+1ch]
+push edi
+mov word [X],70
+mov word [Y],195
+mov word [Color],0xffff
+call inttostr
+mov esi,bytesStr
+call sys_printString
+pop edi
+jmp skipskipprintfilesize
+skipprintfilesize:
+mov word [X],70
+mov word [Y],195
+mov word [Color],0xffff
+mov esi,notApplicable
+call sys_printString
+skipskipprintfilesize:
+mov word [X],120
+mov word [Y],215
+movzx eax,word [edi+16h]
+push ax
+shr ax,11
+call twodigitnum
+mov dx,':'
+call sys_printChar
+pop ax
+push ax
+shr ax,5
+and ax,111111b
+call twodigitnum
+mov dx,':'
+call sys_printChar
+pop ax
+and ax,11111b
+shl ax,1
+call twodigitnum
+add word [X],10
+movzx eax,word [edi+18h]
+push ax
+shr ax,9
+add ax,1980
+call inttostr
+mov dx,'/'
+call sys_printChar
+pop ax
+push ax
+shr ax,5
+and ax,1111b
+call twodigitnum
+mov dx,'/'
+call sys_printChar
+pop ax
+and ax,11111b
+call twodigitnum
+infloop:
+mov dword [mouseaddress],lbuttonclick4
+mov dword [keybaddress],sys_windowloop
+mov dword [bgtaskaddress],sys_nobgtasks
+jmp sys_windowloop
 donefileinfo:
 ret
 filetype db 'File type:     file',0
 dosFN db 'DOS file name:',0
 fileSizeStr db 'File size:',0
 dateModified db 'Date/Time modified:',0
+bytesStr db ' bytes',0
+notApplicable db 'N/A',0
+folderStr db 'Folder',0
+
+lbuttonclick4:
+cmp word [mouseX],299
+jle s41
+cmp word [mouseX],340
+jg s41
+cmp word [mouseY],269
+jle s41
+cmp word [mouseY],285
+jg s41
+mov word [startVal],0	
+mov word [numOfFNs],0
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+jmp donefileinfo
+s41:
+jmp infloop
+
+checkandaddforlfn:
+cmp al,1
+jne skipsfn2
+add esi,20h
+skipsfn2:
+ret
+
+twodigitnum:
+pushad
+mov edx,0
+mov ebx,10
+div ebx
+add ax,30h
+add edx,30h
+mov ebx,edx
+mov edx,eax
+call sys_printChar
+mov edx,ebx
+call sys_printChar
+popad
+ret
 
 renamefile:
 mov al,0xfe
