@@ -390,9 +390,15 @@ popad
 ret
 
 renamefile:
-mov al,0xfe
-out 0x64,al
+cmp byte [itemSelected],0 ;need to modify rename api call to support lfn (lfn entries need to be directly before sfn
+je cancelrenamefile
+mov esi,newFN
+mov edi,80000h
+mov al,255
+call sys_singleLineEntry
+cancelrenamefile:
 ret
+newFN db 'Enter new file name',0
 
 deletefile:
 cmp byte [itemSelected],0
