@@ -217,12 +217,18 @@ cmp byte [esi+0bh],16h
 je doneloopfindextension
 mov byte [saveataddress],0
 mov esi,80000h
-loopfindextension:
+loopfindendoffn:
 lodsb
+cmp al,0
+je loopfindextension
+jmp loopfindendoffn
+loopfindextension:
+mov al,byte [esi]
 cmp al,'.'
 je skipforfolder
-cmp al,0
-je cantfindextension
+cmp esi,80000h
+jle cantfindextension
+dec esi
 jmp loopfindextension
 doneloopfindextension:
 pusha
@@ -237,7 +243,10 @@ mov byte [buttonornot],0
 popa
 mov word [Color],0xffff
 mov esi,folderStr
+jmp skipdecrement
 skipforfolder:
+inc esi
+skipdecrement:
 mov word [X],66
 mov word [Y],155
 call sys_printString
@@ -392,13 +401,36 @@ ret
 renamefile:
 cmp byte [itemSelected],0 ;need to modify rename api call to support lfn (lfn entries need to be directly before sfn
 je cancelrenamefile
+mov edi,80000h
+mov al,0
+mov ecx,256
+repe stosb
 mov esi,newFN
 mov edi,80000h
 mov al,255
 call sys_singleLineEntry
+cmp byte [entrysuccess],1
+je cancelrenamefile
+mov dword [navigateend],cancelrenamefile
+mov word [Y],0
+mov byte [viewerEnabled],0
+call navigatetofile
+mov edi,80000h
+call sys_renamefile
+call reloadfolderafterdelete
 cancelrenamefile:
+mov word [startVal],0	
+mov word [numOfFNs],0
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
 ret
 newFN db 'Enter new file name',0
+createFileFn db 'Windows 95 Serial.txt',0
 
 deletefile:
 cmp byte [itemSelected],0

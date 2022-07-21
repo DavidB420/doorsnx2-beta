@@ -420,6 +420,7 @@ ret
 sys_singleLineEntry:
 mov byte [state],9
 mov byte [entrysuccess],0
+mov dword [edival],edi
 pusha
 mov byte [maxval],al
 push esi
@@ -797,6 +798,166 @@ loop caretLoop
 popa
 ret
 
+createsfnfromlfn:
+pushad
+mov edi,fat12fn
+call skipspace
+call skipspace
+startwithnumberofsfn:
+mov al,'~'
+stosb
+mov byte [fat12fn+3],0
+push esi
+mov esi,fat12fn
+call makeCaps
+mov ax,word [fat12fn]
+mov esi,disk_buffer
+mov ecx,dword [folderSize]
+shr ecx,5
+mov bx,0
+loopfindnumofsfns:
+cmp word [esi],ax
+jne skipfoundsimilarone
+inc bx
+skipfoundsimilarone:
+add esi,32
+loop loopfindnumofsfns
+pop esi
+call savefourdigitnum
+mov ebx,esi
+loopfindend:
+lodsb
+cmp al,0
+je loopfinddot
+jmp loopfindend
+loopfinddot:
+mov al,byte [esi]
+cmp al,'.'
+je founddot
+cmp esi,ebx
+jle didntfinddot
+dec esi
+jmp loopfinddot
+didntfinddot:
+mov al,' '
+stosb
+stosb
+stosb
+founddot:
+inc esi
+mov ecx,3
+repe movsb
+sub edi,3
+mov esi,edi
+call makeCaps
+call generatefatchecksum
+popad
+ret
+
+generatefatchecksum:
+mov esi,fat12fn
+mov ecx,11
+mov al,0
+loopcalculatechecksum:
+mov bl,al
+and al,1
+shl al,7
+and bl,0xfe
+shr bl,1
+or bl,al
+lodsb
+add bl,al
+mov al,bl
+mov byte [fatsfnchecksum],bl
+loop loopcalculatechecksum
+ret
+fatsfnchecksum db 0
+
+savefourdigitnum:
+mov ax,bx
+mov cx,10000
+loopsavedigit:
+mov edx,0
+div cx
+add al,30h
+stosb
+mov ax,cx
+mov edx,0
+mov cx,10
+div cx
+mov cx,ax
+mov ax,bx
+cmp cx,0
+jne loopsavedigit
+ret
+
+skipspace:
+lodsb
+cmp al,' '
+je skipspace
+cmp al,'.'
+je hitendoffilename
+stosb
+ret
+hitendoffilename:
+add esp,4
+jmp startwithnumberofsfn
+
+filllfn:
+pusha
+pusha
+mov ecx,32
+mov al,0
+repe stosb
+popa
+mov dl,bl
+cmp cl,bl
+jne skipterminatebit
+or dl,40h
+skipterminatebit:
+mov byte [edi],dl
+inc edi
+mov dl,0
+mov ecx,5
+call filloutlfnchars
+mov byte [edi],0x0f
+add edi,2
+mov al,byte [fatsfnchecksum]
+stosb
+mov ecx,6
+call filloutlfnchars
+add edi,2
+mov ecx,2
+call filloutlfnchars
+popa
+add esi,13
+ret
+
+filloutlfnchars:
+lodsb
+cmp al,0
+jne skipnullvalue
+cmp dl,1
+je endoffilename
+mov ax,0
+stosw
+mov dl,1
+dec ecx
+cmp ecx,0
+je skipoutputnull
+endoffilename:
+mov ax,0xffff
+stosw
+loop endoffilename
+skipoutputnull:
+dec esi
+ret
+skipnullvalue:
+mov ah,0
+stosw
+loop filloutlfnchars
+ret
+
 getinput:
 push ax
 mov ax,word [X]
@@ -812,6 +973,9 @@ cmp al,0dh
 je enterpress
 cmp al,08h
 je backspace1
+cmp word [lineX],469
+je shiftsinglelineright
+continueaftershiftright:
 movzx bx,byte [maxval]
 cmp word [counterdel],bx
 je windowloop
@@ -837,8 +1001,11 @@ mov word [X],ax
 mov word [Y],bx
 jmp windowloop
 backspace1:
+cmp dword [edival],edi
+jne shiftsinglelineleft
+continueaftershiftleft:
 cmp word [counterdel],0
-je windowloop
+je resetlinextozero
 pusha
 mov byte [buttonornot],1
 mov ax,cx
@@ -851,7 +1018,7 @@ mov byte [buttonornot],0
 popa
 push di
 add di,word [counterdel]
-mov byte [di],0
+mov byte [edi],0
 pop di
 mov word [Color],0
 dec word [counterdel]
@@ -865,7 +1032,62 @@ lineY dw 222
 counterdel dw 0
 bslast db 0
 maxval db 0
-
+shiftsinglelineleft:
+pushad
+dec word [counterdel]
+push di
+add di,word [counterdel]
+mov byte [edi],0
+pop di
+inc word [counterdel]
+push word [X]
+push word [Y]
+mov esi,dword [edival]
+mov word [X],181
+mov word [Y],222
+mov word [Color],0xffff
+call sys_printString
+dec dword [edival]
+mov esi,dword [edival]
+mov word [X],181
+mov word [Y],222
+mov word [Color],0
+call sys_printString
+pop word [Y]
+pop word [X]
+mov word [lineX],469
+mov word [X],469
+popad
+mov cx,word [X]
+jmp continueaftershiftleft
+shiftsinglelineright:
+pushad
+push word [X]
+push word [Y]
+mov esi,dword [edival]
+mov word [X],181
+mov word [Y],222
+mov word [Color],0xffff
+call sys_printString
+inc dword [edival]
+mov esi,dword [edival]
+mov word [X],181
+mov word [Y],222
+mov word [Color],0
+call sys_printString
+pop word [Y]
+pop word [X]
+sub word [X],6
+sub word [lineX],6
+popad
+jmp continueaftershiftright
+resetlinextozero:
+push edi
+mov edi,dword [edival]
+mov byte [edi],0
+pop edi
+mov word [lineX],175
+jmp windowloop
 
 lbuttonclick4:
 cmp word [mouseX],283
@@ -2260,7 +2482,7 @@ push ebx
 push esi
 call loaddirectory
 pop esi
-call sys_createfile ;first four bytes of directory entry overwritten to zeroes
+call sys_createfile
 pop ebx
 mov dword [location],ebx
 mov edi,freeclusts
@@ -2425,6 +2647,64 @@ clustersneeded dd 0
 count dw 0
 
 sys_createfile:
+push esi
+call getStringLength
+pop esi
+cmp edx,12
+jle skiplfncreate
+pusha
+mov eax,edx
+mov edx,0
+mov ebx,13
+div ebx
+cmp edx,0
+je skipaddonedirectoryentry
+inc eax
+skipaddonedirectoryentry:
+mov edi,disk_buffer ;subtract difference between old and new edi value to get new file size, then use that to determine if we need a new cluster.
+mov ecx,0xffff
+findemptyrootentry2:
+mov byte bl,[edi]
+cmp bl,0
+je foundempty2
+cmp bl,0e5h
+je foundempty2
+failfindemptyrootentry2:
+add edi,32
+loop findemptyrootentry2
+foundempty2:
+mov ecx,eax
+push edi
+loopcheckifdirentryisavailable:
+sub edi,32
+cmp byte [edi],0
+je direntryavailable
+cmp byte [edi],0xe5
+je direntryavailable
+gotonextemptyrootdir2:
+pop edi
+jmp failfindemptyrootentry2
+direntryavailable:
+cmp edi,disk_buffer
+jl gotonextemptyrootdir2
+loop loopcheckifdirentryisavailable
+pop edi
+call createsfnfromlfn
+push edi
+mov ecx,eax
+mov ebx,1
+loopfilllfn:
+sub edi,32
+call filllfn
+inc ebx
+cmp ebx,ecx
+jle loopfilllfn
+pop edi
+mov dword [102c0h],edi
+popa
+mov edi,dword [102c0h]
+jmp foundempty
+skiplfncreate:
 mov edi,fat12fn
 call sys_makefnfat12
 mov edi,disk_buffer ;subtract difference between old and new edi value to get new file size, then use that to determine if we need a new cluster.
@@ -2690,6 +2970,18 @@ mov edi,fat12fn2
 call sys_makefnfat12
 popa
 mov edi,eax
+mov byte [edi],229
+push edi
+sub edi,15h
+loopclearlfn2:
+cmp byte [edi],0x0f
+jne doneloopclearlfn2
+mov byte [edi],0xff
+mov byte [edi-0bh],229
+sub edi,20h
+jmp loopclearlfn2
+doneloopclearlfn2:
+pop edi
 mov esi,fat12fn2
 mov ecx,12
 repe movsb
@@ -4002,7 +4294,8 @@ jmp nolfnfound
 foundpossiblesfn2:
 mov al,byte [esi-21]
 cmp al,0x0f
-je nextrootentry
+je checkiflfnisdeleted
+lfnisdeleted:
 mov al,byte [esi]
 cmp al,0xe5
 je nextrootentry
@@ -4068,6 +4361,11 @@ pop ax
 mov esi,dword [esival]
 mov al,0
 ret
+checkiflfnisdeleted:
+mov al,byte [esi-20h]
+cmp al,0xe5
+jne nextrootentry
+jmp lfnisdeleted
 
 sys_numoffatfn:
 pushad
@@ -4114,7 +4412,8 @@ jmp nextrootentry2
 foundpossiblesfn:
 mov al,byte [esi-21]
 cmp al,0x0f
-je nextrootentry2
+je checkiflfnisdeleted2
+lfnisdeleted2:
 mov al,byte [esi]
 cmp al,0xe5
 je nextrootentry2
@@ -4124,6 +4423,12 @@ cmp dword [esi],538976302
 je nextrootentry2
 inc ecx
 jmp nextrootentry2
+checkiflfnisdeleted2:
+mov al,byte [esi-20h]
+cmp al,0xe5
+jne nextrootentry2
+jmp lfnisdeleted2
+
 
 fdcdetect:
 cmp byte [floppyavail],1
