@@ -430,7 +430,6 @@ mov byte [itemSelected],0
 mov word [selectVal],0
 ret
 newFN db 'Enter new file name',0
-createFileFn db 'Windows 95 Serial.txt',0
 
 deletefile:
 cmp byte [itemSelected],0
@@ -1050,7 +1049,7 @@ call sys_drawbox
 mov byte [buttonornot],0
 call sys_getoldlocation
 mov edi,folderFN
-mov ecx,9
+mov ecx,8
 repe movsb
 mov edi,60000h
 mov eax,0
@@ -1071,7 +1070,7 @@ mov byte [folderLoaded],1
 mov word [startVal],0
 notfolder:
 mov edi,folderFN
-mov al,' '
+mov al,0
 mov ecx,11
 repe stosb
 mov word [prevVal],30
@@ -1082,7 +1081,7 @@ pop word [X]
 popa
 notdoubleclicked:
 ret
-folderFN times 11 db ' ', '.',0
+folderFN times 12 db 0
 folderLoaded db 0
 fat12fn times 13 db 0
 folderAddress dd 70000h

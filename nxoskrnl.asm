@@ -2706,6 +2706,11 @@ mov edi,dword [102c0h]
 jmp foundempty
 skiplfncreate:
 mov edi,fat12fn
+pushad
+mov ecx,11
+mov al,0
+repe stosb
+popad
 call sys_makefnfat12
 mov edi,disk_buffer ;subtract difference between old and new edi value to get new file size, then use that to determine if we need a new cluster.
 mov ecx,0xffff
@@ -2770,7 +2775,9 @@ mov byte [edi+28],0
 mov byte [edi+29],0
 mov byte [edi+30],0
 mov byte [edi+31],0
+pushad
 call sys_overwritefolder
+popad
 ret
 
 sys_deletefile:
@@ -2924,14 +2931,7 @@ mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
 pusha
-mov eax,dword [directoryCluster]
-mov edi,102c0h
-call sys_reloadfolder
-mov esi,102c0h
-mov ecx,dword [numOfSectors]
-imul ecx,200h
-mov edi,disk_buffer
-repe movsb
+call loaddirectory
 popa
 mov edi,disk_buffer
 mov esi,fat12fn
@@ -2966,8 +2966,18 @@ pop edi
 pop esi
 mov esi,edi
 pusha
-mov edi,fat12fn2
-call sys_makefnfat12
+mov bx,word [eax+26]
+mov word [startingCluster],bx
+mov bx,word [eax+20]
+mov word [startingCluster+2],bx
+call sys_createfile
+pusha
+call loaddirectory
+popa
+mov bx,word [startingCluster]
+mov word [edi+26],bx
+mov bx,word [startingCluster+2]
+mov word [edi+20],bx
 popa
 mov edi,eax
 mov byte [edi],229
@@ -2982,17 +2992,13 @@ sub edi,20h
 jmp loopclearlfn2
 doneloopclearlfn2:
 pop edi
-mov esi,fat12fn2
-mov ecx,12
-repe movsb
-mov ax,19
-call twelvehts2
 call sys_overwritefolder
 mov edi,disk_buffer
 mov esi,102c0h
 mov ecx,dword [folderSize]
 repe movsb
 ret
+startingCluster dd 0
 
 fat12fn2 times 13 db 0
 
@@ -3268,9 +3274,21 @@ copytonewstr:
 lodsb
 cmp al,'.'
 je extfound
+cmp cx,8
+je justskipext
+cmp al,0
+jne skipusespaceinstead
+mov al,' '
+skipusespaceinstead:
 stosb
 inc cx
 jmp copytonewstr
+justskipext:
+mov al,' '
+stosb
+stosb
+stosb
+ret
 extfound:
 cmp cx,8
 je addext
@@ -3311,9 +3329,9 @@ jmp checkifspaceneeded
 justcopyfn:
 pop esi
 sub esi,edx
-mov ecx,11
+mov ecx,8
 repe movsb
-ret
+jmp justskipext
 
 addadditionalcluster:
 pushad
