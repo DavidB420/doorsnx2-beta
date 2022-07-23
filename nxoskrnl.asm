@@ -58,6 +58,7 @@ numOfSectors dd 0
 directoryCluster dd 19
 jmp sys_reloadfolder
 saveataddress db 0
+jmp sys_createfolder
 
 sys_main:
 mov dword [vidmem],eax
@@ -2650,8 +2651,11 @@ sys_createfile:
 push esi
 call getStringLength
 pop esi
+call lookforspaceinstring
+jc startlfncreate
 cmp edx,12
 jle skiplfncreate
+startlfncreate:
 pusha
 mov eax,edx
 mov edx,0
@@ -2775,6 +2779,17 @@ mov byte [edi+28],0
 mov byte [edi+29],0
 mov byte [edi+30],0
 mov byte [edi+31],0
+pushad
+call sys_overwritefolder
+popad
+ret
+
+sys_createfolder:
+call sys_createfile
+pushad
+call loaddirectory
+popad
+mov byte [edi+0bh],10h
 pushad
 call sys_overwritefolder
 popad
@@ -2970,7 +2985,18 @@ mov bx,word [eax+26]
 mov word [startingCluster],bx
 mov bx,word [eax+20]
 mov word [startingCluster+2],bx
+mov ebx,dword [eax+28]
+mov dword [fileSize],ebx
+mov bl,byte [eax+0bh]
+cmp bl,10h
+je skipfilerename
+cmp bl,16h
+je skipfilerename
 call sys_createfile
+jmp skipfolderrename
+skipfilerename:
+call sys_createfolder
+skipfolderrename:
 pusha
 call loaddirectory
 popa
@@ -2978,6 +3004,8 @@ mov bx,word [startingCluster]
 mov word [edi+26],bx
 mov bx,word [startingCluster+2]
 mov word [edi+20],bx
+mov ebx,dword [fileSize]
+mov dword [edi+28],ebx
 popa
 mov edi,eax
 mov byte [edi],229
@@ -3501,6 +3529,22 @@ mov ch,al
 pop ax
 pop bx
 mov dl,byte [bootdev]
+ret
+
+lookforspaceinstring:
+pushad
+clc
+looplookforspace:
+lodsb
+cmp al,' '
+je foundspace
+cmp al,0
+je didntfindspace
+jmp looplookforspace
+foundspace:
+stc
+didntfindspace:
+popad
 ret
 
 getStringLength:

@@ -181,6 +181,11 @@ sys_numoffatfn equ 300cch
 ;IN: EAX = Starting cluster, EDI = location to save directory
 sys_reloadfolder equ 300d9h
 
+;sys_createfolder
+;Create a folder
+;IN: ESI = folder name
+sys_createfolder equ 300dfh
+
 ;buttonornot byte
 buttonornot equ 3002dh
 
