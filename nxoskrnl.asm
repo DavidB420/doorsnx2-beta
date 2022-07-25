@@ -59,6 +59,7 @@ directoryCluster dd 19
 jmp sys_reloadfolder
 saveataddress db 0
 jmp sys_createfolder
+needfreshcluster db 0
 
 sys_main:
 mov dword [vidmem],eax
@@ -2790,20 +2791,34 @@ ret
 sys_createfolder:
 call sys_createfile
 pushad
+call loaddirectory
+popad
+mov byte [edi+0bh],10h
+pushad
+call sys_overwritefolder
+popad
+cmp byte [needfreshcluster],0
+je skipaddanothercluster
+pushad
 mov eax,1
 mov edi,disk_buffer
 mov ecx,9
 mov dx,0
 mov byte [selecteddrive],0
 call readwritesectors
-call findavailableclusters ;Add termination byte for cluster
+call findavailableclusters
+movzx eax,word [freeclusts]
+mov dword [oldcluster],eax
+mov ebx,0xff0
+mov ecx,1
+pushad
+call startsavecluster
+popad
 call loaddirectory
 popad
-push ax
-mov ax,word [freeclusts]
+movzx eax,word [freeclusts]
 mov word [edi+26],ax
-pop ax
-mov byte [edi+0bh],10h
+push ax
 pushad
 call sys_overwritefolder
 popad
@@ -2811,6 +2826,27 @@ mov edi,disk_buffer
 mov ecx,200h
 mov al,0
 repe stosb
+pop ax
+mov edi,disk_buffer
+mov esi,dotfileEntry
+mov ecx,0ch
+repe movsb
+mov word [disk_buffer+1ah],ax
+mov edi,disk_buffer
+add edi,32
+mov esi,dotfileEntry
+mov ecx,0ch
+repe movsb
+mov byte [disk_buffer+33],'.'
+mov eax,dword [directoryCluster]
+cmp eax,19
+jne skipsettozero
+mov eax,31
+skipsettozero:
+sub eax,31
+mov word [disk_buffer+32+1ah],ax
+shr eax,16
+mov word [disk_buffer+32+20],ax
 movzx eax,word [freeclusts]
 add eax,31
 mov edi,disk_buffer
@@ -2818,8 +2854,10 @@ mov ecx,1
 mov dx,1
 mov byte [selecteddrive],0
 call readwritesectors
+skipaddanothercluster:
 call loaddirectory
 ret
+dotfileEntry db 0x2E, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x10
 
 sys_deletefile:
 mov dword [numOfSectors],0

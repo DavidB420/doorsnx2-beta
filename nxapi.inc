@@ -210,6 +210,9 @@ keyormouse equ 300adh
 ;saveataddress byte
 saveataddress equ 300deh
 
+;needfreshcluster byte
+needfreshcluster equ 300e4h
+
 ;X word
 X equ 30031h
 

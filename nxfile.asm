@@ -181,7 +181,9 @@ call sys_singleLineEntry
 cmp byte [entrysuccess],1
 je skipnewfolder
 mov esi,80000h
+mov byte [needfreshcluster],1
 call sys_createfolder
+mov byte [needfreshcluster],0
 call reloadfolderafterdelete
 skipnewfolder:
 mov word [startVal],0	
