@@ -2809,7 +2809,7 @@ call readwritesectors
 call findavailableclusters
 movzx eax,word [freeclusts]
 mov dword [oldcluster],eax
-mov ebx,0xff0
+mov ebx,0xfff
 mov ecx,1
 pushad
 call startsavecluster
@@ -3509,6 +3509,8 @@ dec ecx
 cmp ecx,0
 jg loopsavecluster
 cmp ebx,0xff0
+je donesavecluster
+cmp ebx,0xfff
 je donesavecluster
 mov word [clustercount],0
 mov ebx,0xff0
