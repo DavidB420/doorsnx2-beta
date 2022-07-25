@@ -567,6 +567,10 @@ mov dword [navigateend],donerecursivedelete
 mov word [Y],0
 mov byte [viewerEnabled],0
 call navigatetofile
+mov edi,dword [directoryCluster]
+mov dword [origCluster],edi
+mov edi,dword [directorySize]
+mov dword [origSize],edi
 mov edi,dword [esival]
 push esi
 push edi
@@ -686,13 +690,17 @@ cmp word [skipreturn],1
 jne skipreturnsub
 ret
 skipreturnsub:
-mov dword [directoryCluster],19
-mov dword [directorySize],1c00h
+mov esi,dword [origCluster]
+mov dword [directoryCluster],esi
+mov esi,dword [origSize]
+mov dword [directorySize],esi
 call reloadfolderafterdelete
 mov esi,folderFN
 jmp doneclearoutfolder
 oldCluster dd 0
 oldSize dd 0
+origCluster dd 0
+origSize dd 0
 skipreturn dw 0
 oldFN times 13 db 0
 

@@ -3095,6 +3095,8 @@ startingCluster dd 0
 fat12fn2 times 13 db 0
 
 filenotfound:
+cli
+jmp $
 mov dword [directoryCluster],19
 cmp byte [autoornot],1
 je donefnf
