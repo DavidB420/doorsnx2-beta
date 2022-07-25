@@ -157,7 +157,44 @@ cmp word [mouseY],27
 jg s9
 call fileinfo
 s9:
+cmp word [mouseX],479
+jle s10
+cmp word [mouseX],495
+jg s10
+cmp word [mouseY],13
+jle s10
+cmp word [mouseY],27
+jg s10
+call newfolder
+s10:
 jmp mainLoop
+
+newfolder:
+mov edi,80000h
+mov al,0
+mov ecx,256
+repe stosb
+mov esi,newFolderStr
+mov edi,80000h
+mov al,255
+call sys_singleLineEntry
+cmp byte [entrysuccess],1
+je skipnewfolder
+mov esi,80000h
+call sys_createfolder
+call reloadfolderafterdelete
+skipnewfolder:
+mov word [startVal],0	
+mov word [numOfFNs],0
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+ret
+newFolderStr db 'Enter new folder name:',0
 
 fileinfo:
 cmp byte [itemSelected],0

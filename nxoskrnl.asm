@@ -2677,6 +2677,7 @@ failfindemptyrootentry2:
 add edi,32
 loop findemptyrootentry2
 foundempty2:
+push ecx
 mov ecx,eax
 push edi
 loopcheckifdirentryisavailable:
@@ -2687,12 +2688,14 @@ cmp byte [edi],0xe5
 je direntryavailable
 gotonextemptyrootdir2:
 pop edi
+pop ecx
 jmp failfindemptyrootentry2
 direntryavailable:
 cmp edi,disk_buffer
 jl gotonextemptyrootdir2
 loop loopcheckifdirentryisavailable
 pop edi
+pop ecx
 call createsfnfromlfn
 push edi
 mov ecx,eax
@@ -2787,12 +2790,35 @@ ret
 sys_createfolder:
 call sys_createfile
 pushad
+mov eax,1
+mov edi,disk_buffer
+mov ecx,9
+mov dx,0
+mov byte [selecteddrive],0
+call readwritesectors
+call findavailableclusters ;Add termination byte for cluster
 call loaddirectory
 popad
+push ax
+mov ax,word [freeclusts]
+mov word [edi+26],ax
+pop ax
 mov byte [edi+0bh],10h
 pushad
 call sys_overwritefolder
 popad
+mov edi,disk_buffer
+mov ecx,200h
+mov al,0
+repe stosb
+movzx eax,word [freeclusts]
+add eax,31
+mov edi,disk_buffer
+mov ecx,1
+mov dx,1
+mov byte [selecteddrive],0
+call readwritesectors
+call loaddirectory
 ret
 
 sys_deletefile:
