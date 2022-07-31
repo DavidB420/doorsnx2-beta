@@ -25,7 +25,7 @@ ret
 
 titleString db 'Doors NX File Manager',0
 volumeString db 'Volume',0
-fileSize dw 0
+fileSize dd 0
 numOfFNs dw 0
 startVal dw 0
 endVal dw 0
@@ -126,6 +126,7 @@ jle s6
 cmp word [mouseY],27
 jg s6
 call viewersub
+mov byte [copyset],0
 s6:
 cmp word [mouseX],579
 jle s7
@@ -136,6 +137,7 @@ jle s7
 cmp word [mouseY],27
 jg s7
 call deletefile
+mov byte [copyset],0
 s7:
 cmp word [mouseX],599
 jle s8
@@ -146,6 +148,7 @@ jle s8
 cmp word [mouseY],27
 jg s8
 call renamefile
+mov byte [copyset],0
 s8:
 cmp word [mouseX],559
 jle s9
@@ -166,8 +169,146 @@ jle s10
 cmp word [mouseY],27
 jg s10
 call newfolder
+mov byte [copyset],0
 s10:
+cmp word [mouseX],519
+jle s11
+cmp word [mouseX],535
+jg s11
+cmp word [mouseY],13
+jle s11
+cmp word [mouseY],27
+jg s11
+call copyfile
+s11:
+cmp word [mouseX],499
+jle s12
+cmp word [mouseX],515
+jg s12
+cmp word [mouseY],13
+jle s12
+cmp word [mouseY],27
+jg s12
+call pastefile
+s12:
 jmp mainLoop
+
+pastefile:
+cmp byte [copyset],1
+jne skippaste
+mov ebx,dword [edival]
+mov esi,90000h
+mov eax,dword [fileSize]
+call sys_writefile
+call reloadfolderafterdelete
+mov word [startVal],0	
+mov word [numOfFNs],0
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+skippaste:
+ret
+
+copyfile:
+cmp byte [itemSelected],0
+je donecopyfile
+mov ax,word [selectVal]
+movzx ecx,ax
+mov edx,dword [directorySize]
+mov edi,90000h
+mov byte [saveataddress],1
+mov word [X],320
+mov word [Y],240
+mov word [Color],0xffff
+call sys_displayfatfn
+cmp al,1
+jne skiplfn3
+add esi,32
+skiplfn3:
+mov esi,dword [esi+28]
+mov dword [fileSize],esi
+mov byte [saveataddress],0
+push edi
+mov dword [navigateend],donecopyfile2
+mov word [Y],0
+mov byte [viewerEnabled],1
+call navigatetofile
+pop edi
+mov dword [edival],edi
+mov esi,fileFN
+call sys_loadfile
+call reloadfolderafterdelete
+mov byte [copyset],1
+jmp donecopyfile
+donecopyfile2:
+add esp,8
+call cantcopyfolder
+donecopyfile:
+mov word [startVal],0	
+mov word [numOfFNs],0
+mov esi,titleString
+call sys_setupScreen
+call sys_getoldlocation
+call drawFirstScreen
+mov byte [state],0
+mov byte [itemSelected],0
+mov word [selectVal],0
+ret
+edival dd 0
+copyset db 0
+
+cantcopyfolder:
+mov ax,150
+mov bx,200
+mov cx,500
+mov dx,250
+call sys_drawbox
+mov byte [buttonornot],1
+mov ax,290
+mov bx,227
+mov cx,338
+mov dx,241
+mov word [Color],0xffff
+call sys_drawbox
+mov byte [buttonornot],0
+mov word [Color],0
+mov word [X],200
+mov word [Y],210
+mov esi,warnspr
+call sys_dispsprite
+mov word [X],306
+mov word [Y],229
+mov esi,ok
+call sys_printString
+mov word [X],252
+mov word [Y],210
+mov esi,cantcopyfolderstr
+call sys_printString
+call sys_getoldlocation
+nahfolder:
+mov dword [mouseaddress],lbuttonclick5
+mov dword [keybaddress],sys_windowloop
+mov dword [bgtaskaddress],sys_nobgtasks
+jmp sys_windowloop
+ret
+cantcopyfolderstr db 'Cannot copy folder!',0
+
+lbuttonclick5:
+cmp word [mouseX],289
+jle s51
+cmp word [mouseX],337
+jg s51
+cmp word [mouseY],226
+jle s51
+cmp word [mouseY],241
+jg s51
+ret
+s51:
+jmp nahfolder
 
 newfolder:
 mov edi,80000h

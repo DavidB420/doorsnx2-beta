@@ -2654,8 +2654,13 @@ call getStringLength
 pop esi
 call lookforspaceinstring
 jc startlfncreate
+cmp byte [isAFolder],0
+je skipnotafolder
+cmp edx,8
+jg startlfncreate
+skipnotafolder:
 cmp edx,12
-jle skiplfncreate
+jle skiplfncreate ;check if folder, if so lower limit to 8
 startlfncreate:
 pusha
 mov eax,edx
@@ -2786,9 +2791,12 @@ mov byte [edi+31],0
 pushad
 call sys_overwritefolder
 popad
+mov byte [isAFolder],0
 ret
+isAFolder db 0
 
 sys_createfolder:
+mov byte [isAFolder],1
 call sys_createfile
 pushad
 call loaddirectory
@@ -3095,8 +3103,6 @@ startingCluster dd 0
 fat12fn2 times 13 db 0
 
 filenotfound:
-cli
-jmp $
 mov dword [directoryCluster],19
 cmp byte [autoornot],1
 je donefnf
