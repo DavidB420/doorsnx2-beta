@@ -2334,9 +2334,9 @@ call sys_makefnfat12
 pop edi
 push edi
 mov eax,dword [directoryCluster]
-mov edi,102c0h
+mov edi,10300h
 call sys_reloadfolder
-mov esi,102c0h
+mov esi,10300h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
 mov dword [folderSize],ecx
@@ -2364,7 +2364,7 @@ jae filenotfound
 foundfn1:
 mov ax,32
 mul bx
-mov edi,disk_buffer
+mov edi,disk_buffer ;try looking at the clusters being read
 and eax,0xffff
 add edi,eax
 push eax
@@ -2465,9 +2465,9 @@ ret
 loaddirectory:
 pushad
 mov eax,dword [directoryCluster]
-mov edi,102c0h
+mov edi,10300h
 call sys_reloadfolder
-mov esi,102c0h
+mov esi,10300h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
 mov dword [folderSize],ecx
@@ -2713,9 +2713,9 @@ inc ebx
 cmp ebx,ecx
 jle loopfilllfn
 pop edi
-mov dword [102c0h],edi
+mov dword [10300h],edi
 popa
-mov edi,dword [102c0h]
+mov edi,dword [10300h]
 jmp foundempty
 skiplfncreate:
 mov edi,fat12fn
@@ -2873,9 +2873,9 @@ mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
 mov eax,dword [directoryCluster]
-mov edi,102c0h
+mov edi,10300h
 call sys_reloadfolder
-mov esi,102c0h
+mov esi,10300h
 mov ecx,dword [numOfSectors]
 imul ecx,200h
 mov dword [folderSize],ecx
@@ -2921,7 +2921,7 @@ pop edi
 pusha
 call sys_overwritefolder
 mov edi,disk_buffer
-mov esi,102c0h
+mov esi,10300h
 mov ecx,dword [folderSize]
 repe movsb
 popa
@@ -2990,11 +2990,11 @@ sys_overwritefolder:
 cmp dword [directoryCluster],19
 je overwriteroot 
 mov byte [saveinsteadofload],1
-mov edi,102c0h
+mov edi,10300h
 mov esi,disk_buffer
 mov ecx,dword [folderSize]
 repe movsb
-mov edi,102c0h
+mov edi,10300h
 push edi
 mov eax,dword [directoryCluster]
 sub eax,31
@@ -3094,7 +3094,7 @@ doneloopclearlfn2:
 pop edi
 call sys_overwritefolder
 mov edi,disk_buffer
-mov esi,102c0h
+mov esi,10300h
 mov ecx,dword [folderSize]
 repe movsb
 ret
@@ -3280,6 +3280,10 @@ mov byte [msdbulkintoggle],bl
 mov ecx,dword [ecxval]
 mov eax,dword [eaxval]
 call msdreadwritesector
+mov bl,byte [msdbulkouttoggle]
+mov byte [esi],bl
+mov bl,byte [msdbulkintoggle]
+mov byte [esi+1],bl
 skipusbmsdreadwrite:
 donereadwritesectors:
 mov byte [usbhidenabled],1
@@ -6442,7 +6446,6 @@ cmp byte [endp1],0
 jz failmsdehci
 cmp byte [endp2],0
 jz failmsdehci
-
 mov bl,byte [ehcidevaddress]
 mov edi,msdaddresses
 movzx ecx,byte [msdindex]
@@ -6577,6 +6580,13 @@ call ehcicreatetdio
 call ehcicreateqh ;its most likely fullspeed
 mov byte [usbcontrollertype],2
 movzx edx,byte [msdindex]
+mov eax,0
+mov ecx,1
+mov edi,disk_buffer
+call msdreadwritesector
+cmp dword [disk_buffer+37h],'AT12'
+je addmsd3
+movzx edx,byte [msdindex]
 mov eax,1
 mov ecx,34
 mov edi,disk_buffer
@@ -6613,6 +6623,16 @@ je ehcinexthubport
 popad
 ret
 ehcicomefromhub db 0
+addmsd3:
+mov edi,msdtoggle
+movzx ecx,byte [msdtogglecounter]
+add edi,ecx
+mov al,byte [msdbulkouttoggle]
+stosb
+mov al,byte [msdbulkintoggle]
+stosb
+popad
+jmp addmsd2
 
 ehcimsdreadin: ;gotta create a td chain not seperate qhs
 pushad
@@ -6631,7 +6651,9 @@ mov edx,msdbulkouttoggle
 skipmsdwrite5:
 mov eax,dword [edival]
 call ehcicreatetdio
+mov byte [skipehciwaitbyte],1
 call ehcicreateqh
+mov byte [skipehciwaitbyte],0
 add dword [edival],200h
 pop ecx
 loop loopehcimsdreadin
@@ -7640,6 +7662,13 @@ call ohcicreateedandsend
 jc failmsdohci
 mov byte [usbcontrollertype],1
 movzx edx,byte [msdindex]
+mov eax,0
+mov ecx,1
+mov edi,disk_buffer
+call msdreadwritesector
+cmp dword [disk_buffer+37h],'AT12'
+je addmsd2
+movzx edx,byte [msdindex]
 mov eax,1
 mov ecx,34
 mov edi,disk_buffer
@@ -8524,7 +8553,7 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciwait
-jc timeout
+;jc timeout
 mov eax,setdevaddress
 movzx bx,byte [devaddress]
 mov word [eax+2],bx
@@ -8580,6 +8609,8 @@ jne notmsd
 ;cmp byte [102c8h],40h
 ;jne notmsd
 call initmsd
+mov byte [fullspeed],0
+mov byte [setupornot],0
 mov bl,byte [devaddress]
 or bl,80h
 mov dh,1
@@ -8798,6 +8829,8 @@ mov eax,dword [102c4h]
 ;cmp eax,40000000h
 ;jne nexthubport
 call initmsd
+mov byte [fullspeed],0
+mov byte [setupornot],0
 inc byte [devaddress]
 nexthubport:
 inc byte [currentport]
@@ -9109,6 +9142,13 @@ repe stosd
 call uhciwait
 jc failmsd
 movzx edx,byte [msdindex]
+mov eax,0
+mov ecx,1
+mov edi,disk_buffer
+call msdreadwritesector
+cmp dword [disk_buffer+37h],'AT12'
+je addmsd2
+movzx edx,byte [msdindex]
 mov eax,1
 mov ecx,34
 mov edi,disk_buffer
@@ -9124,8 +9164,19 @@ inc byte [idedriveid]
 call detectmsdpartitions
 failmsd:
 ret
+addmsd2:
+pushad
+mov al,byte [msdindex]
+mov byte [idedriveid],al
+inc byte [idedriveid]
+mov bx,3
+push esi
+push edi
+push bx
+jmp addmsd
 
 detectmsdpartitions:
+pushad
 mov esi,disk_buffer
 add esi,512
 mov bx,0
@@ -9158,6 +9209,7 @@ mov ecx,5
 mov edi,fat12str
 repe cmpsb
 jne notfat12msd
+addmsd:
 movzx edx,byte [drivecounter]
 mov esi,driveletter
 add esi,edx
@@ -9233,6 +9285,7 @@ sub edi,16
 inc bx
 jmp partitiondetectonemsd
 donelookingmsd:
+popad
 ret
 updatemsdendpointsandtoggle:
 mov edi,msdendp
@@ -9323,7 +9376,9 @@ or eax,2
 mov ecx,1024
 repe stosd
 mov dh,0
+mov byte [skipuhciwaitbyte],1
 call uhciwait
+mov byte [skipuhciwaitbyte],0
 clc
 jmp skipuhci3
 notuhci3:
@@ -9333,17 +9388,12 @@ call ohcicreatetdio
 call ohcicreateedandsend
 jmp skipuhci3
 notohci3:
+mov byte [skipehciwaitbyte],1
 mov word [maxlen],1fh ;Disable 4 sector limit for EHCI only needed for UHCI and OHCI
 mov edx,msdbulkouttoggle
 call ehcicreatetdio
 call ehcicreateqh
-mov eax,dword [tdval]
-add eax,8
-mov eax,dword [eax] ;try looking at qh
-mov word [X],0
-add word [Y],7
-mov word [Color],0xffff
-call inttostr
+mov byte [skipehciwaitbyte],0
 clc
 skipuhci3:
 cmp byte [usbcontrollertype],0
@@ -9360,7 +9410,9 @@ or eax,2
 mov ecx,1024
 repe stosd
 mov dh,1
+mov byte [skipuhciwaitbyte],1
 call uhciwait
+mov byte [skipuhciwaitbyte],0
 clc
 jmp skipuhci4
 notuhci4:
@@ -9420,7 +9472,9 @@ or eax,2
 mov ecx,1024
 repe stosd
 mov dh,0
+mov byte [skipuhciwaitbyte],1
 call uhciwait
+mov byte [skipuhciwaitbyte],0
 jmp skipohci5
 notuhci5:
 cmp byte [usbcontrollertype],1
@@ -9431,8 +9485,10 @@ jmp skipohci5
 notohci5:
 and ch,0x0f
 mov edx,msdbulkintoggle
+mov byte [skipehciwaitbyte],1
 call ehcicreatetdio
 call ehcicreateqh
+mov byte [skipehciwaitbyte],0
 clc
 skipohci5:
 mov eax,dword [actrunamt]
@@ -9456,7 +9512,8 @@ msdcurrentaddress db 0
 msdreadorwrite db 0
 
 msdreadin:
-mov ecx,dword [actrunamt]
+mov dword [tdlocation],20000h
+mov ecx,dword [actrunamt] ;edival and ecxval values get fucked
 mov edi,dword [tdlocation]
 msdreadinloop:
 cmp ecx,1
@@ -9617,23 +9674,38 @@ ret
 
 uhciwait:
 mov ecx,150
+cmp byte [skipuhciwaitbyte],0
+je uhciloop 
+mov ebx,700 ;find a pit speed that is stable but works faster also find out why we cant go up to the root
+call initPIT
 uhciloop:
 mov eax,1
 call pitdelay
-mov esi,[td+4]
 dec ecx
 cmp ecx,0
 je timeout2
+mov esi,[td+4]
 test esi,100000000000000000000000b
 jnz uhciloop
 mov edi,dword [uhciframelist]
 mov eax,1
 mov ecx,1024
 repe stosd
+cmp byte [skipuhciwaitbyte],0
+je skipuhcipitreset
+mov ebx,100
+call initPIT
+skipuhcipitreset:
 ret
 timeout2:
+cmp byte [skipuhciwaitbyte],0
+je skipuhcipitreset2
+mov ebx,100
+call initPIT
+skipuhcipitreset2:
 stc
 ret
+skipuhciwaitbyte db 0
 
 createtdio:
 test bl,80h
