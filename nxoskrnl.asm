@@ -3246,7 +3246,7 @@ mov edx,0
 mov ecx,10h
 div ecx
 add eax,eax
-mov dword [tdval],20000h
+mov dword [tdval],0xfe00
 sub dword [tdval],eax
 mov edx,dword [tdval]
 mov dword [tdlocation],edx
