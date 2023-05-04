@@ -6,6 +6,13 @@ org 50000h
 mov esi,titleString
 call sys_setupScreen
 
+mov esi,dword [directoryCluster]
+mov dword [ogDirectoryCluster],esi
+mov esi,dword [numOfSectors]
+mov dword [ogNumOfSectors],esi
+shl esi,9
+mov dword [ogDirectorySize],esi
+
 mov byte [6ffffh],0
 
 call sys_getrootdirectory
@@ -34,6 +41,9 @@ selectVal dw 0
 itemSelected db 0
 viewerpos dd 80000h
 navigateend dd 0
+ogDirectoryCluster dd 0
+ogNumOfSectors dd 0
+ogDirectorySize dd 0
 
 lbuttonclick:
 cmp word [mouseX],619
@@ -597,6 +607,7 @@ mov byte [viewerEnabled],0
 call navigatetofile
 mov edi,80000h
 call sys_renamefile
+mov dword [directorySize],eax
 call reloadfolderafterdelete
 cancelrenamefile:
 mov word [startVal],0	
@@ -1218,9 +1229,12 @@ mov dx,480
 call sys_drawbox
 mov byte [buttonornot],0
 call sys_getoldlocation
-mov dword [directoryCluster],19
-mov dword [numOfSectors],14
-mov dword [directorySize],1c00h
+mov eax,dword [ogDirectoryCluster]
+mov dword [directoryCluster],eax
+mov eax,dword [ogNumOfSectors]
+mov dword [numOfSectors],eax
+mov eax,dword [ogDirectorySize]
+mov dword [directorySize],eax
 call sys_getrootdirectory
 mov byte [folderLoaded],1
 mov word [startVal],0
@@ -1487,7 +1501,8 @@ mov word [Y],461
 mov esi,downspr
 mov bl,1
 call sys_dispsprite
-cmp dword [directoryCluster],19
+mov esi,dword [ogDirectoryCluster]
+cmp dword [directoryCluster],esi
 je skipdisplayfoldernameattop
 call displayfoldername
 skipdisplayfoldernameattop:

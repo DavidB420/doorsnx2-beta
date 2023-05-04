@@ -23,15 +23,7 @@ Signature db 41
 VolumeID dd 00000000h
 VolumeLabel db "DOORSNX    "
 FileSystem db "FAT12   "
-bootloaderstart:
-	mov ax,07C0h			
-	add ax,544			
-	cli				
-	mov ss,ax
-	mov sp,4096
-	sti				
-	mov ax,07C0h			
-	mov ds,ax
+bootloaderstart:			
 	cmp dl, 0
 	je no_change
 	mov [bootdev], dl		
@@ -55,8 +47,13 @@ floppy_ok:
 	mov bx, ds
 	mov es, bx
 	mov bx, si
-	mov ah,2			
-	mov al,14		
+	mov ah,2
+	push bx
+	mov bx,word [RootDirEntries]
+    imul bx,32
+	shr bx,9
+	mov al,bl
+	pop bx
 	pusha	
 read_root_dir:
 	popa				
@@ -90,36 +87,59 @@ next_root_entry:
 found_file_to_load:			
 	mov ax, word [es:di+0Fh]
 	mov word [cluster], ax
-	mov ax, 35
+	mov di, 0
+	mov word [pointer],di
+	mov ax,1000h
+	mov es,ax
+	mov bx, 35
+	mov ax,word [SectorsPerFat]
+	loopreadfat:
+	xchg ax,bx
 	call l2hts
-	mov di, buffer
-	mov bx, di
+	xchg bx,ax
 	mov ah,2
-	mov al,9
-	pusha
-read_fat:
-	popa	
-	pusha
+	xchg bx, di
+	read_fat:
 	stc
-	int 13h	
-	jnc read_fat_ok	
-	jnc read_fat		
+	push ax
+	mov al,1 ;ah=1 error find when it happens
+	int 13h
+	xchg di,bx
+	add di,512
+	pop ax
+	dec al
+	inc bx
+	cmp al,0
+	jne loopreadfat
+	;jnc read_fat_ok	
+	;jnc read_fat		
 read_fat_ok:
-	popa
-	mov ax,2000h
+	;mov ax,2000h
 	mov bx,0
-	mov ah,2
-	mov al,1
-	push ax	
 load_file_sector:
-	mov ax,word [cluster]
-	add ax,31
+	push si
+	push bx
+	push cx
+	mov ax,35
+	mov si,word [SectorsPerFat]
+	add ax,si
+	add ax,si
+	mov bx,word [RootDirEntries]
+    imul bx,32
+	shr bx,9
+	mov cx,word [cluster]
+	sub cx,2
+	imul cx,8
+	add ax,bx
+	add ax,cx
+	pop cx
+	pop bx
+	pop si
 	call l2hts
 	mov ax,2000h
 	mov es,ax
 	mov bx,word [pointer]
-	pop ax
-	push ax
+	mov ax,0209h
 	stc
 	int 13h
 	jnc calculate_next_cluster
@@ -131,9 +151,11 @@ calculate_next_cluster:
 	mul bx
 	mov bx,2
 	div bx				
-	mov si,buffer
-	add si,ax		
-	mov ax,word [ds:si]
+	xor si,si
+	add si,ax
+	mov bx,1000h
+	mov es,bx
+	mov ax,word [es:si]
 	or dx, dx	
 	jz even
 odd:
@@ -148,7 +170,6 @@ next_cluster_cont:
 	add word [pointer], 512	
 	jmp load_file_sector
 end:
-	pop ax
 	mov dl,byte [bootdev]
 	jmp 2000h:0000h
 reboot:
@@ -178,8 +199,8 @@ l2hts:
 	push bx
 	push ax
 	mov bx,ax
-	mov dx, 0	
-	div word [SectorsPerTrack]
+	mov dx, 0
+    div word [SectorsPerTrack]
 	add dl,01h
 	mov cl, dl
 	mov ax, bx
@@ -194,10 +215,10 @@ l2hts:
 	mov dl, byte [bootdev]
 	ret
 filename db 'NXLDR   SYS'
-kernelnf db 'Error loading NXLDR.SYS! Press any key to restart',0
-bootdev dw 0
-cluster dw 0
-pointer dw 0
+kernelnf db 'NXLDR.SYS not found! Press any key',0
+bootdev db 0
+cluster equ 7e00h
+pointer equ 7e02h
 times 510-($-$$) db 0
 dw 0AA55h
 buffer:

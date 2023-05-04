@@ -104,6 +104,7 @@ sys_deletefile equ 30074h
 ;sys_renamefile
 ;Renames a file
 ;IN: ESI = original filename, EDI = new filename
+;OUT: EAX = New folder size
 sys_renamefile equ 30079h
 
 ;sys_charforward

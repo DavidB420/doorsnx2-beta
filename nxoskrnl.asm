@@ -66,20 +66,40 @@ mov dword [vidmem],eax
 
 mov byte [keyormouse],dl
 
-mov al,byte [201d2h+3]
+mov al,byte [2020ch]
 mov byte [bootdev],al
-mov ax,word [201c9h+3]
+mov ax,word [201fah]
 mov word [SectorsPerTrack],ax
-mov ax,word [201cbh+3]
+mov ax,word [201fch]
+mov word [SectorsPerFat],ax
+mov ax,word [201feh]
+mov word [RootDirEntries],ax
+mov al,byte [20200h]
+mov byte [SectorsPerCluster],al
+mov ax,word [20201h]
+mov word [StartingFatSector],ax
+mov ax,word [20203h]
 mov word [Sides],ax
-mov al,byte [201fch]
+mov ax,word [20205h]
+mov word [StartingRootDirSector],ax
+mov al,byte [20233h]
 mov byte [picmaster],al
-mov al,byte [201fdh]
+mov al,byte [20234h]
 mov byte [picslave],al
-mov al,byte [201feh]
+mov al,byte [20235h]
 mov byte [pciusable],al
-mov al,byte [201ffh]
+mov al,byte [20236h]
 mov byte [floppyavail],al
+
+movzx eax,word [StartingRootDirSector]
+mov dword [directoryCluster],eax
+push bx
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,bl
+pop bx
+mov dword [numOfSectors],ecx
 
 sgdt [gdtloc]
 sidt [idtloc]
@@ -108,7 +128,7 @@ mov ebx,mousehandler
 mov [idt31+104],bx
 shr ebx,16
 mov [idt31+110],bx
-
+;mov byte [selecteddrive],0
 mov ebx,fdchandler
 mov [idt31+56],bx
 shr ebx,16
@@ -158,6 +178,8 @@ je skipusb
 call usbdetect
 skipusb:
 
+call detectbootdrive
+
 mov esi,titleString
 call sys_setupScreen
 
@@ -199,7 +221,7 @@ jmp sys_windowloop
 
 jmp $
 
-titleString db 'Doors NX 2.0 BETA Copyright (C) 2022 David Badiei',0
+titleString db 'Doors NX 2.0 BETA Copyright (C) 2023 David Badiei',0
 table db 0x01,"1234567890-=",0X0E,0x0F,'qwertyuiop[]',0x1C,0,"asdfghjkl;'",0,0,0,"zxcvbnm,./",0,0,0," ",0
 tableCaps db 0x01,"1234567890-=",0X0E,0x0F,'QWERTYUIOP[]',0x1C,0,"ASDFGHJKL;'",0,0,0,"ZXCVBNM,./",0,0,0," ",0
 tableShift db 0x01,"!@#$%^&*()_+",0X0E,0x0F,'QWERTYUIOP{}',0x1C,0,"ASDFGHJKL:",0x22,0,0,0,"ZXCVBNM<>?",0,0,0," ",0
@@ -472,11 +494,16 @@ ret
 
 sys_getrootdirectory:
 pushad
-mov eax,19
+movzx eax,word [StartingRootDirSector]
 mov edi,disk_buffer
-mov ecx,14
+push bx
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,bl
+pop bx
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 popad
 ret
@@ -2289,7 +2316,8 @@ cmp byte [loadsuccess],1
 je osstart
 mov dl,byte [bootdev]
 call program
-mov dword [directoryCluster],19
+movzx eax,word [StartingRootDirSector]
+mov dword [directoryCluster],eax
 mov esi,titleString
 call sys_setupScreen
 call drawWidgets
@@ -2307,12 +2335,17 @@ Sides dw 0
 fileSize dd 0
 cluster dw 0
 SectorsPerTrack dw 18
+SectorsPerCluster db 0
+StartingFatSector dw 0
+StartingRootDirSector dw 0
+SectorsPerFat dw 0
+RootDirEntries dw 0
 program equ 50000h
 disk_buffer equ 40000h
 fat equ 0ac00h
 
 sys_reloadfolder:
-cmp ax,19
+cmp ax,word [StartingRootDirSector]
 je reloadroot
 sub ax,31
 push edi
@@ -2322,7 +2355,13 @@ call sys_getrootdirectory
 mov esi,disk_buffer
 mov ecx,1c00h
 repe movsb
-mov dword [numOfSectors],14
+push bx
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,bl
+mov dword [numOfSectors],ecx
+pop bx
 ret
 
 sys_loadfile:
@@ -2357,11 +2396,17 @@ mov esi,fat12fn
 mov edi,disk_buffer
 and eax,0xffff
 add edi,eax
-cmp bx,224
+cmp bx,word [RootDirEntries]
 jle findfn1
-cmp bx,224
+cmp bx,word [RootDirEntries]
 jae filenotfound
 foundfn1:
+cmp byte [skipread],1
+jne skipreadfile
+mov byte [skipread],0
+pop edi
+ret
+skipreadfile:
 mov ax,32
 mul bx
 mov edi,disk_buffer ;try looking at the clusters being read
@@ -2373,30 +2418,36 @@ mov dword [fileSize],eax
 pop eax
 mov ax,word [edi+1Ah]
 reloadfolderhere:
+mov dword [numOfSectors],0
 mov word [cluster],ax
-add word [cluster],31
 push ax
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 pop ax
 pop edi
 ;mov ebx,edi
 push edi
 movzx eax,word [cluster]
-mov ecx,1
+cmp eax,0
+je noclusters
+mov ecx,8
+cmp word [StartingFatSector],1
+jne skipforhdd1
+sub cx,7
+skipforhdd1:
+add dword [numOfSectors],ecx
 mov dx,0
 cmp byte [saveinsteadofload],0
 je skipincrementdx2
 inc dx
 skipincrementdx2:
-mov byte [selecteddrive],0
+call clusttosect
+;mov byte [selecteddrive],0
 call readwritesectors
-inc dword [numOfSectors]
-sub dword [cluster],31
 pop edi
 ;mov ebp,0
 mov ax,word [cluster]
@@ -2418,32 +2469,91 @@ shr dx,4
 endload:
 mov ax,dx
 mov word [cluster],dx
-add edi,512
-add word [cluster],31
+mov eax,512
+cmp word [StartingFatSector],1
+je skipforfloppy3
+shl eax,3
+skipforfloppy3:
+add edi,eax
+;add word [cluster],31
+;mov byte [selecteddrive],0
 movzx eax,word [cluster]
-mov ecx,1
+push si
+push bx
+push cx
+movzx eax,word [StartingFatSector]
+movzx esi,word [SectorsPerFat]
+add ax,si
+add ax,si
+movzx ebx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,word [cluster]
+sub cx,2
+cmp word [StartingFatSector],1
+je skipforfloppy2
+imul cx,8
+skipforfloppy2:
+add ax,bx
+add ax,cx
+pop cx
+pop bx
+pop si
+mov ecx,8
+cmp word [StartingFatSector],1
+jne skipforhdd2
+sub cx,7
+skipforhdd2:
+add dword [numOfSectors],ecx
 mov dx,0
 cmp byte [saveinsteadofload],0
 je skipincrementdx
 inc dx
 skipincrementdx:
 push edi
-mov byte [selecteddrive],0
 call readwritesectors
 pop edi
-jc donereadsectorfat12
-inc dword [numOfSectors]
-sub word [cluster],31
+;jc donereadsectorfat12
 mov dx,word [cluster]
 mov ax,dx
 cmp dx,0ff0h
 jb loadnextclust
+jmp donereadsectorfat12
+noclusters:
+pop edi
 donereadsectorfat12:
 clc
 mov byte [saveinsteadofload],0
 mov eax,dword [fileSize]
 ;mov dword [directoryCluster],19
+mov eax,1
+mul byte [SectorsPerCluster]
+sub dword [numOfSectors],eax
 ret
+clusttosect:
+push si
+push bx
+push cx
+movzx eax,word [StartingFatSector]
+movzx esi,word [SectorsPerFat]
+add ax,si
+add ax,si
+movzx ebx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,word [cluster]
+sub cx,2
+cmp word [StartingFatSector],1
+je skipforfloppy1
+imul cx,8
+skipforfloppy1:
+add ax,bx
+add ax,cx
+pop cx
+pop bx
+pop si
+ret
+skipread db 0
 
 sys_overwrite:
 push esi
@@ -2477,6 +2587,32 @@ mov dword [edi],0
 popad
 ret
 
+detectbootdrive:
+pushad
+call sys_returnnumberofdrives
+mov bl,al
+mov cl,0
+looptraversedrives:
+mov byte [selecteddrive],cl
+mov byte [autoornot],1
+mov esi,fileFN
+mov edi,program
+mov byte [skipread],1
+push cx
+call sys_loadfile
+pop cx
+cmp byte [loadsuccess],0
+jne setbootdrive
+mov byte [bootdev],cl
+setbootdrive:
+inc cl
+cmp cl,bl
+jl looptraversedrives
+mov al,byte [bootdev]
+mov byte [selecteddrive],al
+popad
+ret
+
 sys_writefile:
 mov dword [numOfSectors],0
 mov dword [fileSize],eax
@@ -2496,8 +2632,10 @@ loop cleanroutine
 getclustamount:
 mov ecx,dword [fileSize]
 mov eax,ecx
-mov edx,0
+movzx edx,byte [SectorsPerCluster]
 mov ebx,512
+imul ebx,edx
+xor edx,edx
 div ebx
 cmp edx,0
 jg addaclust
@@ -2510,11 +2648,11 @@ mov ebx,dword [fileSize]
 cmp ebx,0
 je finishwrite
 pushad
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 popad
 movzx ecx,word [clustersneeded]
@@ -2583,11 +2721,11 @@ add ax,0ff8h
 writefat:
 mov word [esi],ax
 pushad
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,1
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 popad
 mov ecx,0
@@ -2598,15 +2736,22 @@ mov ax,word [edi]
 cmp ax,0
 je writerootentry
 pushad
-movzx eax,ax
-add eax,31
+push word [cluster]
+mov word [cluster],ax
+call clusttosect
+pop word [cluster]
 mov edi,dword [location]
-mov ecx,1
+;mov byte [selecteddrive],0
+mov ecx,8
+cmp word [StartingFatSector],1
+jne skipforhdd3
+sub cx,7
+skipforhdd3:
 mov dx,1
-mov byte [selecteddrive],0
 call readwritesectors
+movzx eax,byte [SectorsPerCluster]
+add dword [location],eax
 popad
-add dword [location],512
 inc cx
 inc cx
 jmp saveloop
@@ -2649,6 +2794,7 @@ clustersneeded dd 0
 count dw 0
 
 sys_createfile:
+mov byte [isLFN],0
 push esi
 call getStringLength
 pop esi
@@ -2662,6 +2808,7 @@ skipnotafolder:
 cmp edx,12
 jle skiplfncreate ;check if folder, if so lower limit to 8
 startlfncreate:
+mov byte [isLFN],1
 pusha
 mov eax,edx
 mov edx,0
@@ -2736,7 +2883,8 @@ je foundempty
 add edi,32
 loop findemptyrootentry
 foundempty:
-cmp dword [directoryCluster],19
+movzx eax,word [StartingRootDirSector]
+cmp dword [directoryCluster],eax
 je skipaddnewcluster
 push edi
 sub edi,disk_buffer
@@ -2746,10 +2894,29 @@ mov eax,edi
 mov edx,0
 mov edi,200h
 div edi
-mov ecx,eax
-push ecx
-call addadditionalcluster
-call loaddirectory
+cmp edx,0
+je skipaddadditionalsector
+inc eax
+skipaddadditionalsector:
+mov ecx,eax ;subtract current folder size from ecx
+mov edi,dword [folderSize]
+shr edi,9
+sub ecx,edi
+;push ecx
+pusha
+mov edi,esi
+mov esi,disk_buffer
+mov ecx,0xffff
+repe movsb
+popa
+push esi
+call addadditionalcluster ;update folder size when adding a new cluster or update it when create the file name
+pop esi
+mov edi,disk_buffer
+mov ecx,0xffff
+repe movsb
+cmp byte [isLFN],1
+je doneaddnewcluster
 mov eax,0
 mov edi,disk_buffer
 sub dword [folderSize],200h
@@ -2794,6 +2961,7 @@ popad
 mov byte [isAFolder],0
 ret
 isAFolder db 0
+isLFN db 0
 
 sys_createfolder:
 mov byte [isAFolder],1
@@ -2808,11 +2976,11 @@ popad
 cmp byte [needfreshcluster],0
 je skipaddanothercluster
 pushad
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 call findavailableclusters
 movzx eax,word [freeclusts]
@@ -2847,7 +3015,7 @@ mov ecx,0ch
 repe movsb
 mov byte [disk_buffer+33],'.'
 mov eax,dword [directoryCluster]
-cmp eax,19
+cmp ax,word [StartingRootDirSector]
 jne skipsettozero
 mov eax,31
 skipsettozero:
@@ -2856,11 +3024,12 @@ mov word [disk_buffer+32+1ah],ax
 shr eax,16
 mov word [disk_buffer+32+20],ax
 movzx eax,word [freeclusts]
-add eax,31
+mov word [cluster],ax
+call clusttosect
 mov edi,disk_buffer
-mov ecx,1
+movzx ecx,byte [SectorsPerCluster]
 mov dx,1
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 skipaddanothercluster:
 call loaddirectory
@@ -2930,11 +3099,11 @@ cmp ax,0
 je zerosectors
 mov word [tmpcluster],ax
 push ax
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 pop ax
 and eax,0xffff
@@ -2970,11 +3139,11 @@ jmp moreCluster
 donefat:
 mov ax,1
 call twelvehts2
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,1
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 zerosectors:
 mov edi,fat12fn
@@ -2987,7 +3156,8 @@ tmpcluster dw 0
 folderSize dd 0
 
 sys_overwritefolder:
-cmp dword [directoryCluster],19
+movzx edi,word [StartingRootDirSector]
+cmp dword [directoryCluster],edi
 je overwriteroot 
 mov byte [saveinsteadofload],1
 mov edi,10300h
@@ -3001,11 +3171,16 @@ sub eax,31
 jmp reloadfolderhere
 overwriteroot:
 pusha
-mov eax,19
+movzx eax,word [StartingRootDirSector]
 mov edi,disk_buffer
-mov ecx,14
+push bx
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+movzx ecx,bl
+pop bx
 mov dx,1
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 popa
 ret
@@ -3018,6 +3193,7 @@ mov byte [loadsuccess],0
 mov edi,fat12fn
 call sys_makefnfat12
 pusha
+mov eax,dword [directoryCluster]
 call loaddirectory
 popa
 mov edi,disk_buffer
@@ -3064,6 +3240,7 @@ cmp bl,10h
 je skipfilerename
 cmp bl,16h
 je skipfilerename
+mov byte [bruh],1
 call sys_createfile
 jmp skipfolderrename
 skipfilerename:
@@ -3093,17 +3270,22 @@ jmp loopclearlfn2
 doneloopclearlfn2:
 pop edi
 call sys_overwritefolder
+call loaddirectory
 mov edi,disk_buffer
 mov esi,10300h
 mov ecx,dword [folderSize]
 repe movsb
+mov eax,dword [folderSize]
 ret
 startingCluster dd 0
+bruh db 0
 
 fat12fn2 times 13 db 0
 
 filenotfound:
-mov dword [directoryCluster],19
+mov byte [skipread],0
+movzx eax,word [StartingRootDirSector]
+mov dword [directoryCluster],eax
 cmp byte [autoornot],1
 je donefnf
 mov ax,150
@@ -3246,7 +3428,7 @@ mov edx,0
 mov ecx,10h
 div ecx
 add eax,eax
-mov dword [tdval],0xfe00
+mov dword [tdval],20000h
 sub dword [tdval],eax
 mov edx,dword [tdval]
 mov dword [tdlocation],edx
@@ -3439,17 +3621,24 @@ jmp justskipext
 
 addadditionalcluster:
 pushad
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,0
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
+popad
+pushad
+mov eax,ecx
+movzx edx,byte [SectorsPerCluster]
+mul edx
+shl eax,9
+add dword [folderSize],eax
 popad
 push ecx
 call findavailableclusters
-movzx eax,word [directoryCluster]
-sub eax,31
+mov eax,dword [directoryCluster]
+sub eax,31 ;replace this with inverse of new cluster2sector thing
 gotolastclust:
 mov dword [oldcluster],eax
 mov ecx,eax
@@ -3525,15 +3714,15 @@ je donesavecluster
 cmp ebx,0xfff
 je donesavecluster
 mov word [clustercount],0
-mov ebx,0xff0
+mov ebx,0xfff
 jmp startsavecluster
 donesavecluster:
 pushad
-mov eax,1
+movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
-mov ecx,9
+movzx ecx,word [SectorsPerFat]
 mov dx,1
-mov byte [selecteddrive],0
+;mov byte [selecteddrive],0
 call readwritesectors
 popad
 ret
@@ -4610,7 +4799,7 @@ jmp initfdc
 
 fdcreadwrite:
 pushad
-push word [SectorsPerTrack]
+push word [SectorsPerTrack] ;try implementing a time out function for floppy
 push word [Sides]
 mov word [SectorsPerTrack],18
 mov word [Sides],2
@@ -4862,7 +5051,7 @@ mov eax,1
 call pitdelay
 dec ecx
 cmp ecx,0
-je resetpc
+je donefdcwait
 cmp byte [fdcdone],0
 je loopfdcwait
 donefdcwait:
@@ -5271,24 +5460,37 @@ mov al,30h
 mov esi,edi
 skippatawrite:
 out dx,al
+sub edx,7
+movzx ecx,cl
+loopiopata:
+push ecx
 push edx
+add edx,7
 stillgoing:
 in al,dx
 test al,8
 jz stillgoing
-mov eax,256
-xor bx,bx
-mov bl,cl
-mul bx
-mov ecx,eax
+test al,80h
+jnz stillgoing
+test al,0x21
+jne stillgoing
 pop edx
-sub edx,7
+mov ecx,256
 cmp dword [edxval],0
 jne skippataread2
 rep insw
-jmp skippatawrite2
+jmp donepataread
 skippataread2:
 rep outsw
+add edx,7
+in al,dx
+in al,dx
+in al,dx
+in al,dx
+sub edx,7
+donepataread:
+pop ecx
+loop loopiopata
 mov eax,50
 call pitdelay
 skippatawrite2:
@@ -8553,7 +8755,7 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciwait
-;jc timeout
+jc timeout
 mov eax,setdevaddress
 movzx bx,byte [devaddress]
 mov word [eax+2],bx
@@ -9691,19 +9893,13 @@ mov edi,dword [uhciframelist]
 mov eax,1
 mov ecx,1024
 repe stosd
-cmp byte [skipuhciwaitbyte],0
-je skipuhcipitreset
 mov ebx,100
 call initPIT
-skipuhcipitreset:
 ret
 timeout2:
-cmp byte [skipuhciwaitbyte],0
-je skipuhcipitreset2
+stc
 mov ebx,100
 call initPIT
-skipuhcipitreset2:
-stc
 ret
 skipuhciwaitbyte db 0
 

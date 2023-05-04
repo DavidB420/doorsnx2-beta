@@ -8,6 +8,21 @@ mov es, ax
 mov ss, ax    
 mov sp, 0
 
+mov ax,0
+mov es,ax
+mov ax,word [es:7c11h]
+mov word [RootDirEntries],ax
+mov ax,word [es:7c16h]
+mov word [SectorsPerFat],ax
+mov al,byte [es:7c0dh]
+mov byte [SectorsPerCluster],al
+cmp word [es:7c13h],2880
+je skiphddstart
+mov word [StartingFatSector],35
+skiphddstart:
+mov ax,2000h
+mov es,ax
+
 ;Get drive number from bootsector
 mov byte [bootdev],dl
 
@@ -116,7 +131,12 @@ lfbAddress dd 0
 disk_buffer equ 1000h
 file equ 0
 SectorsPerTrack dw 18
+SectorsPerFat dw 9
+RootDirEntries dw 224
+SectorsPerCluster db 0
+StartingFatSector dw 1
 Sides dw 2
+StartingRootDirSector dw 19
 fileSize dw 0
 keyormouse db 0
 fat equ 4000h
@@ -223,11 +243,21 @@ pop es
 ret
 
 loadfile:
-mov ax,19
+push bp
+mov ax,word [StartingFatSector]
+mov si,word [SectorsPerFat]
+add ax,si
+add ax,si
+mov word [StartingRootDirSector],ax
 call twelvehts2
 mov dl,byte [bootdev]
 mov ah,2
-mov al,14
+push bx
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+mov al,bl
+pop bx
 mov si,disk_buffer
 mov bx,si
 int 13h
@@ -261,23 +291,64 @@ pop ax
 mov ax,word [di+1Ah]
 mov word [cluster],ax
 push ax
-mov ax,1
+mov ax,1000h
+mov es,ax
+mov di,0
+mov bx, word [StartingFatSector]
+mov ax,word [SectorsPerFat]
+loopreadfat:
+xchg ax,bx
 call twelvehts2
-mov dl,byte [bootdev]
+xchg bx,ax
 mov ah,2
-mov al,9
-mov si,fat
-mov bx,si
+xchg bx, di
+read_fat:
+stc
+push ax
+mov al,1 ;ah=1 error find when it happens
+mov dl,byte [bootdev]
 int 13h
+xchg di,bx
+add di,512
+pop ax
+dec al
+inc bx
+cmp al,0
+jne loopreadfat
 pop ax
 push ax
 mov di,file
 mov bx,di
-call twelvehts
+push si
+push bx
+push cx
+mov ax,word [StartingFatSector]
+mov si,word [SectorsPerFat]
+add ax,si
+add ax,si
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+mov cx,word [cluster]
+sub cx,2
+cmp word [StartingFatSector],1
+je skipforfloppy1
+imul cx,8
+skipforfloppy1:
+add ax,bx
+add ax,cx
+pop cx
+pop bx
+pop si
+call twelvehts2
 push es
 mov ax,3000h
 mov es,ax
-mov ax,0201h
+mov ax,0208h
+cmp word [StartingFatSector],1
+jne skipforhdd1
+sub ax,7
+skipforhdd1:
 int 13h
 pop es
 mov bp,0
@@ -287,9 +358,11 @@ mov cx,ax
 mov dx,ax
 shr dx,1
 add cx,dx
-mov bx,fat
+mov dx,1000h
+mov es,dx
+mov bx,0
 add bx,cx
-mov dx,word [bx]
+mov dx,word [es:bx]
 test ax,1
 jnz odd1
 even1:
@@ -300,22 +373,54 @@ shr dx,4
 end:
 mov ax,dx
 mov word [cluster],dx
-call twelvehts
-add bp,512
-mov si,fat
+push si
+push bx
+push cx
+mov ax,word [StartingFatSector]
+mov si,word [SectorsPerFat]
+add ax,si
+add ax,si
+mov bx,word [RootDirEntries]
+imul bx,32
+shr bx,9
+mov cx,word [cluster]
+sub cx,2
+cmp word [StartingFatSector],1
+je skipforfloppy2
+imul cx,8
+skipforfloppy2:
+add ax,bx
+add ax,cx
+pop cx
+pop bx
+pop si
+call twelvehts2
+add bp,1000h
+cmp word [StartingFatSector],1
+jne skipforhdd2
+sub bp,0xe00
+skipforhdd2:
+mov si,0
 add si,bp
 mov bx,si
-sub bx,4000h
+;sub bx,4000h
 push es
 mov ax,3000h
 mov es,ax
-mov ax,0201h
+mov ax,0208h
+cmp word [StartingFatSector],1
+jne skipforhdd3
+sub ax,7
+skipforhdd3:
 int 13h
 pop es
 mov dx,word [cluster]
 mov ax,dx
 cmp dx,0ff0h
 jb loadnextclust
+mov ax,2000h
+mov es,ax
+pop bp
 ret
 
 filenotfound:
