@@ -506,7 +506,7 @@ out 0x21,al
 mov al,0xff
 out 0xa1,al
 sti
-cmp byte [201ffh],1
+cmp byte [20236h],1
 jne skipdetectfloppy
 call fdcdetect
 skipdetectfloppy:
