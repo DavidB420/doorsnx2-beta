@@ -2593,6 +2593,7 @@ call sys_returnnumberofdrives
 mov bl,al
 mov cl,0
 looptraversedrives:
+push bx
 mov byte [selecteddrive],cl
 mov byte [autoornot],1
 mov esi,fileFN
@@ -2605,6 +2606,7 @@ cmp byte [loadsuccess],0
 jne setbootdrive
 mov byte [bootdev],cl
 setbootdrive:
+pop bx
 inc cl
 cmp cl,bl
 jl looptraversedrives
@@ -4517,6 +4519,7 @@ lastlinebyte db 0
 
 sys_returnnumberofdrives:
 mov al,byte [drivecounter]
+shr al,1
 ret
 
 sys_displayfatfn:
@@ -5045,7 +5048,7 @@ popad
 ret
 
 fdcwaitforirq:
-mov ecx,1000000
+mov ecx,1000000 ;find out how to setup pit optimally using bos
 loopfdcwait:
 mov eax,1
 call pitdelay
