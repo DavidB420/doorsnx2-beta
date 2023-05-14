@@ -128,7 +128,7 @@ mov ebx,mousehandler
 mov [idt31+104],bx
 shr ebx,16
 mov [idt31+110],bx
-;mov byte [selecteddrive],0
+
 mov ebx,fdchandler
 mov [idt31+56],bx
 shr ebx,16
