@@ -166,6 +166,7 @@ out 0xa1,al
 call fdcdetect
 
 call patadetect
+
 cmp byte [pciusable],1
 je skipahci
 cli
@@ -3242,7 +3243,6 @@ cmp bl,10h
 je skipfilerename
 cmp bl,16h
 je skipfilerename
-mov byte [bruh],1
 call sys_createfile
 jmp skipfolderrename
 skipfilerename:
@@ -3280,7 +3280,6 @@ repe movsb
 mov eax,dword [folderSize]
 ret
 startingCluster dd 0
-bruh db 0
 
 fat12fn2 times 13 db 0
 
@@ -8766,6 +8765,7 @@ mov bl,0
 mov dh,0
 mov ch,0
 mov word [maxlen],7
+mov byte [counterTDChain],2
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -8875,6 +8875,7 @@ mov bl,byte [hubaddr]
 mov ch,0
 mov dh,0
 mov word [maxlen],7
+mov byte [counterTDChain],2
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -8987,10 +8988,11 @@ ret
 deviceconnectedtohub:
 mov bl,0
 or bl,80h
-mov dh,1
+mov dh,0
 mov ch,0
 mov eax,setup_packet
-mov word [maxlen],7
+mov word [maxlen],8 ;create tdchain with output 8 bytes but setup 7 bytes, or idk fucking put tatos code see if that shit works
+mov byte [counterTDChain],4
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -9010,7 +9012,8 @@ mov word [eax+2],bx
 mov bl,0
 mov dh,0
 mov ch,0
-mov word [maxlen],7
+mov word [maxlen],8
+mov byte [counterTDChain],2
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -9033,6 +9036,7 @@ call pitdelay
 mov eax,dword [102c4h]
 ;cmp eax,40000000h
 ;jne nexthubport
+mov byte [bruhbyte],1
 call initmsd
 mov byte [fullspeed],0
 mov byte [setupornot],0
@@ -9040,6 +9044,7 @@ inc byte [devaddress]
 nexthubport:
 inc byte [currentport]
 jmp hubportreset
+bruhbyte db 0
 
 initmsd:
 mov bl,byte [devaddress]
@@ -9049,11 +9054,12 @@ mov eax,getconfigdescriptor
 push eax
 mov edi,eax
 add edi,6
-mov eax,7
+mov eax,9
 stosw
 pop eax
 mov ch,0
-mov word [maxlen],7
+mov word [maxlen],8
+mov byte [counterTDChain],3
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -9083,7 +9089,7 @@ stosw
 pop eax
 mov ch,0
 mov word [maxlen],7
-mov byte [needsixtds],1
+mov byte [counterTDChain],6
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -9967,16 +9973,27 @@ notuhciout:
 mov byte [statustoken],69h
 mov byte [datatoken],69h
 savedevaddress:
+cmp byte [needsixtds],1
+jne skipaddanothertd
+inc byte [counterTDChain]
+skipaddanothertd:
 mov cl,bl
 mov dl,bl
 and cl,7fh
-push eax
 mov edi,td
-cmp dh,0
-je setstatustd
-mov eax,td2
-continuetd:
+push bx
+mov bl,byte [counterTDChain]
+mov byte [maxTDChain],bl
+pop bx
+loopcreateuhcitd:
+push eax
+mov eax,edi
+add eax,20h
 or eax,100b
+cmp byte [counterTDChain],1
+jne skipsetnextuhcitdone
+mov eax,1
+skipsetnextuhcitdone:
 stosd
 mov eax,1
 shl eax,23
@@ -9987,16 +10004,33 @@ shl ebx,26
 or eax,ebx
 skiplowdevice:
 stosd
+push dx
+mov dl,byte [maxTDChain]
+cmp byte [counterTDChain],dl
+jne skipNewMaxLen
+mov eax,7
+jmp skipOldMaxLen
+skipNewMaxLen:
 movzx eax,word [maxlen]
+skipOldMaxLen:
+pop dx
+cmp byte [counterTDChain],1
+jne setuhcitdnull
+mov eax,7ffh
+setuhcitdnull:
 shl eax,21
-mov ebx,0
+movzx ebx,byte [uhciTDtoggle]
 shl ebx,19
 or eax,ebx
+not byte [uhciTDtoggle]
+and byte [uhciTDtoggle],1
 movzx ebx,ch
+shl ebx,15
 or eax,ebx
 movzx ebx,cl
 shl ebx,8
 or eax,ebx
+push dx
 cmp byte [setupornot],1
 jne notin
 mov ebx,69h
@@ -10008,214 +10042,57 @@ mov ebx,0xe1
 jmp skipsetup
 notout:
 mov ebx,2dh
+mov dl,byte [maxTDChain]
+cmp byte [counterTDChain],dl
+je skipsetup
+movzx ebx, byte [datatoken]
 skipsetup:
+pop dx
 or eax,ebx
-storethirddword:
 stosd
 pop eax
 stosd
+push eax
 mov eax,0
 stosd
 stosd
 stosd
 stosd
-cmp dh,0
-je skiptostatus
-mov edi,td2
-mov eax,td3
-or eax,100b
-stosd
-mov eax,1
-shl eax,23
-cmp byte [fullspeed],0
-jne skiplowdevice3
-mov ebx,1
-shl ebx,26
-or eax,ebx
-skiplowdevice3:
-stosd
-movzx eax,word [maxlen]
-shl eax,21
-mov ebx,1
-shl ebx,19
-or eax,ebx
-movzx ebx,ch
-or eax,ebx
-movzx ebx,cl
-shl ebx,8
-or eax,ebx
-movzx ebx,byte [datatoken]
-or eax,ebx
-stosd
-mov eax,0
+pop eax
+push dx
 test dl,80h
-jz nooutput1
-mov eax,bufferpointer
-nooutput1:
-stosd
+jnz skipnouhcitdoutput
 mov eax,0
-stosd
-stosd
-stosd
-stosd
-mov edi,td3
-mov eax,td4
-or eax,100b
-stosd
-mov eax,1
-shl eax,23
-cmp byte [fullspeed],0
-jne skiplowdevice4
-mov ebx,1
-shl ebx,26
-or eax,ebx
-skiplowdevice4:
-stosd
-movzx eax,word [maxlen]
-shl eax,21
-mov ebx,0
-shl ebx,19
-or eax,ebx
-movzx ebx,ch
-or eax,ebx
-movzx ebx,cl
-shl ebx,8
-or eax,ebx
-movzx ebx,byte [statustoken]
-or eax,ebx
-stosd
-mov eax,0
-test dl,80h
-jz nooutput2
+jmp skipadd8uhcitd
+skipnouhcitdoutput:
+mov dl,byte [maxTDChain]
+cmp byte [counterTDChain],dl
+jne skipsetuhcitdpacket
 mov eax,bufferpointer
+jmp skipadd8uhcitd
+skipsetuhcitdpacket:
 add eax,8
-nooutput2:
-stosd
-mov eax,0
-stosd
-stosd
-stosd
-stosd
-mov edi,td4
-cmp byte [needsixtds],1
-jne td5next
-mov eax,td6
-jmp createtdagain
-td5next:
-mov eax,td5
-createtdagain:
-or eax,100b
-stosd
-mov eax,1
-shl eax,23
-cmp byte [fullspeed],0
-jne skiplowdevice5
-mov ebx,1
-shl ebx,26
-or eax,ebx
-skiplowdevice5:
-stosd
-movzx eax,word [maxlen]
-shl eax,21
-mov ebx,1
-shl ebx,19
-or eax,ebx
-movzx ebx,ch
-or eax,ebx
-movzx ebx,cl
-shl ebx,8
-or eax,ebx
-movzx ebx,byte [datatoken]
-or eax,ebx
-stosd
-mov eax,0
-test dl,80h
-jz nooutput3
-mov eax,bufferpointer
-movzx ebx,byte [td6offset]
-add eax,ebx
-nooutput3:
-stosd
-mov eax,0
-stosd
-stosd
-stosd
-stosd
-cmp byte [needsixtds],1
-je addsixthtd
-skiptostatus:
-mov edi,td5
-mov eax,1
-;or eax,100b
-stosd
-mov eax,3
-shl eax,27
-mov ebx,1
-shl ebx,24
-or eax,ebx
-cmp byte [fullspeed],0
-jne skiplowdevice2
-mov ebx,1
-shl ebx,26
-or eax,ebx
-skiplowdevice2:
-mov ebx,1
-shl ebx,23
-or eax,ebx
-mov ebx,80h
-shl ebx,16
-or eax,ebx
-stosd
-mov eax,7ffh
-shl eax,21
-mov ebx,1
-shl ebx,19
-or eax,ebx
-movzx ebx,ch
-or eax,ebx
-movzx ebx,cl
-shl ebx,8
-or eax,ebx
+skipadd8uhcitd:
+pop dx
+cmp byte [counterTDChain],2
+jne skiplastuhcitdpid
 cmp dh,0
-je skipout
-mov ebx,0e1h
-jmp skipin
-skipout:
-mov ebx,69h
-skipin:
-or eax,ebx
-storethirddword2:
-stosd
-mov eax,0
-test dl,80h
-jz nooutput4
-mov eax,bufferpointer
-cmp byte [td6offset],24
-je fifthoffset
-add eax,24
-jmp nooutput4
-fifthoffset:
-add eax,32
-nooutput4:
-stosd
-mov eax,0
-stosd
-stosd
-stosd
-stosd
-mov byte [td6offset],16
+jne skipsettoin
+mov byte [setupornot],1
+jmp skiplastuhcitdpid
+skipsettoin:
+mov byte [setupornot],2
+skiplastuhcitdpid:
+dec byte [counterTDChain]
+cmp byte [counterTDChain],0
+jg loopcreateuhcitd
+doneuhcicreatetdchain:
+mov byte [counterTDChain],5
 mov byte [setupornot],0
-mov byte [fullspeed],0
 ret
-setstatustd:
-mov eax,td5
-jmp continuetd
-addsixthtd:
-mov edi,td6
-mov eax,td5
-mov byte [td6offset],24
-mov byte [needsixtds],0
-jmp createtdagain
+counterTDChain db 5
+maxTDChain db 0
+uhciTDtoggle db 0
 
 inithid:
 mov esi,102c0h
