@@ -8744,7 +8744,7 @@ or bl,80h
 mov dh,1
 mov ch,0
 mov eax,setup_packet
-mov word [maxlen],7
+mov word [maxlen],8
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -9949,6 +9949,12 @@ skiplowspeed:
 stosd
 movzx eax,word [maxlen]
 shl eax,21
+cmp word [maxlen],0x7ff
+jne skipuhciiotoggle
+mov ebx,1
+shl ebx,19
+or eax,ebx
+skipuhciiotoggle:
 movzx ebx,ch
 shl ebx,15
 or eax,ebx
@@ -9980,7 +9986,7 @@ skipaddanothertd:
 mov cl,bl
 mov dl,bl
 and cl,7fh
-mov edi,td
+mov edi,dword [uhciTDlocation]
 push bx
 mov bl,byte [counterTDChain]
 mov byte [maxTDChain],bl
@@ -10014,12 +10020,13 @@ skipNewMaxLen:
 movzx eax,word [maxlen]
 skipOldMaxLen:
 pop dx
+movzx ebx,byte [uhciTDtoggle]
 cmp byte [counterTDChain],1
 jne setuhcitdnull
 mov eax,7ffh
+mov ebx,1
 setuhcitdnull:
 shl eax,21
-movzx ebx,byte [uhciTDtoggle]
 shl ebx,19
 or eax,ebx
 not byte [uhciTDtoggle]
@@ -10089,10 +10096,12 @@ jg loopcreateuhcitd
 doneuhcicreatetdchain:
 mov byte [counterTDChain],5
 mov byte [setupornot],0
+mov byte [uhciTDtoggle],0
 ret
 counterTDChain db 5
 maxTDChain db 0
 uhciTDtoggle db 0
+uhciTDlocation dd td
 
 inithid:
 mov esi,102c0h
@@ -10106,6 +10115,19 @@ ret
 initusbkeyboard:
 cmp byte [esi+6],1
 jne doneinithid
+movzx eax,word [102c2h]
+mov edx,0
+mov ecx,8
+div ecx
+cmp edx,0
+je skipaddanothertd2
+inc eax
+skipaddanothertd2:
+add eax,2
+push eax
+pop eax
+xchg ecx,eax
+push ecx
 mov bl,byte [devaddress]
 call uhcicreatehidconfigsetup
 mov edi,qh
@@ -10120,7 +10142,7 @@ mov ecx,1024
 repe stosd
 call uhciwait
 mov eax,102e0h
-mov ecx,8
+pop ecx
 loopreadconfigdesckeyb:
 push eax
 push ecx
@@ -10266,6 +10288,20 @@ jmp doneinithid
 initusbmouse:
 cmp byte [esi+6],1
 jne doneinithid
+movzx eax,word [102c2h]
+sub eax,32
+mov edx,0
+mov ecx,8
+div ecx
+cmp edx,0
+je skipaddanothertd3
+inc eax
+skipaddanothertd3:
+add eax,2
+push eax
+pop eax
+xchg ecx,eax
+push ecx
 mov bl,byte [devaddress]
 call uhcicreatehidconfigsetup
 mov edi,qh
@@ -10279,28 +10315,23 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciwait
-mov eax,102e0h
-mov ecx,8
+mov eax,102e0h ;read what the hell is in 102e0h, idt its reading the whole config desscriptor again, just part of it
+pop ecx
 loopreadconfigdescms:
 push eax
 push ecx
+mov word [maxlen],7
 mov bl,byte [devaddress]
 or bl,80h
+cmp ecx,1
+jg skipnullmaxlen
+mov word [maxlen],0x7ff
+and bl,7fh
+skipnullmaxlen:
 mov dh,0
 mov ch,0
-mov word [maxlen],7
 call createtdio
-mov edi,qh
-mov eax,1
-stosd
-mov eax,td
-stosd
-mov edi,dword [uhciframelist]
-mov eax,qh
-or eax,2
-mov ecx,1024
-repe stosd
-call uhciwait
+call uhcisetupqhframelistandwait
 jc doneinithid
 pop ecx
 pop eax
@@ -10318,6 +10349,7 @@ mov bl,byte [devaddress]
 mov dh,0
 mov ch,0
 mov word [maxlen],7
+mov byte [counterTDChain],2
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -10392,7 +10424,7 @@ or bl,80h
 mov dh,0
 mov ch,byte [msendp]
 mov word [maxlen],4
-call uhcicreatetdinterrupt
+call uhcicreatetdinterrupt ;check if this is giving any errors
 mov edi,qh
 mov eax,1
 stosd
@@ -10404,6 +10436,13 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciinterruptwait
+mov eax,dword [tdlocation]
+add eax,4
+mov eax,dword [eax]
+mov word [X],0
+add word [Y],7
+mov word [Color],0xffff
+call inttostr
 mov edi,hidmsaddresses
 movzx eax,byte [hidmsindex]
 add edi,eax
@@ -10435,6 +10474,20 @@ inc byte [uhcihidvals]
 jmp doneinithid
 uhcihidvals db 0
 uhcihidcurrentvals db 0
+
+uhcisetupqhframelistandwait:
+mov edi,qh
+mov eax,1
+stosd
+mov eax,td
+stosd
+mov edi,dword [uhciframelist]
+mov eax,qh
+or eax,2
+mov ecx,1024
+repe stosd
+call uhciwait
+ret
 
 lookforendp:
 mov esi,102bfh
@@ -10472,7 +10525,9 @@ stosd
 ret
 
 uhciinterruptwait:
-mov esi,[td+4]
+mov esi,dword [tdlocation]
+add esi,4
+mov esi,dword [esi]
 test esi,100000000000000000000000b
 jnz uhciinterruptwait
 mov edi,dword [uhciframelist]
