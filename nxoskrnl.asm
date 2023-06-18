@@ -10415,23 +10415,23 @@ mov ecx,1024
 repe stosd
 call uhciwait
 jc doneinithid
-;mov eax,usbmousedata
-;mov bl,byte [devaddress]
-;or bl,80h
-;mov dh,0
-;mov ch,byte [msendp]
-;mov word [maxlen],4
-;call uhcicreatetdinterrupt ;check if this is giving any errors
-;mov edi,qh
-;mov eax,1
-;stosd
-;mov eax,dword [tdlocation]
-;stosd
-;mov edi,dword [uhciframelist]
-;mov eax,qh
-;or eax,2
-;mov ecx,1024
-;repe stosd
+mov eax,usbmousedata
+mov bl,byte [devaddress]
+or bl,80h
+mov dh,0
+mov ch,byte [msendp]
+mov word [maxlen],4
+call uhcicreatetdinterrupt ;check if this is giving any errors
+mov edi,qh
+mov eax,1
+stosd
+mov eax,dword [tdlocation]
+stosd
+mov edi,dword [uhciframelist]
+mov eax,qh
+or eax,2
+mov ecx,1024
+repe stosd
 ;call uhciinterruptwait
 ;mov eax,dword [tdlocation]
 ;add eax,4
