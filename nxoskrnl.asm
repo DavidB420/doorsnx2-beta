@@ -10116,16 +10116,15 @@ initusbkeyboard:
 cmp byte [esi+6],1
 jne doneinithid
 movzx eax,word [102c2h]
+sub eax,32
 mov edx,0
 mov ecx,8
 div ecx
 cmp edx,0
-je skipaddanothertd2
+je skipaddanothertd4
 inc eax
-skipaddanothertd2:
-add eax,2
-push eax
-pop eax
+skipaddanothertd4:
+;add eax,2 ;check hp desktop downstairs for keyboard stuff
 xchg ecx,eax
 push ecx
 mov bl,byte [devaddress]
@@ -10143,31 +10142,31 @@ repe stosd
 call uhciwait
 mov eax,102e0h
 pop ecx
-loopreadconfigdesckeyb:
+loopreadconfigdesckb:
 push eax
 push ecx
+mov word [maxlen],7
 mov bl,byte [devaddress]
 or bl,80h
+cmp ecx,1
+jg skipnullmaxlenkb
+mov word [maxlen],0x7ff
+and bl,7fh
+skipnullmaxlenkb:
 mov dh,0
 mov ch,0
-mov word [maxlen],7
 call createtdio
-mov edi,qh
-mov eax,1
-stosd
-mov eax,td
-stosd
-mov edi,dword [uhciframelist]
-mov eax,qh
-or eax,2
-mov ecx,1024
-repe stosd
-call uhciwait
+call uhcisetupqhframelistandwait
+mov eax,dword [td+4]
+mov word [X],0
+add word [Y],7
+mov word [Color],0xffff
+call inttostr
 jc doneinithid
 pop ecx
 pop eax
 add eax,8
-loop loopreadconfigdesckeyb
+loop loopreadconfigdesckb
 call lookforendp
 mov edi,kbendp
 add esi,2
@@ -10298,8 +10297,6 @@ je skipaddanothertd3
 inc eax
 skipaddanothertd3:
 add eax,2
-push eax
-pop eax
 xchg ecx,eax
 push ecx
 mov bl,byte [devaddress]
@@ -10418,31 +10415,31 @@ mov ecx,1024
 repe stosd
 call uhciwait
 jc doneinithid
-mov eax,usbmousedata
-mov bl,byte [devaddress]
-or bl,80h
-mov dh,0
-mov ch,byte [msendp]
-mov word [maxlen],4
-call uhcicreatetdinterrupt ;check if this is giving any errors
-mov edi,qh
-mov eax,1
-stosd
-mov eax,dword [tdlocation]
-stosd
-mov edi,dword [uhciframelist]
-mov eax,qh
-or eax,2
-mov ecx,1024
-repe stosd
-call uhciinterruptwait
-mov eax,dword [tdlocation]
-add eax,4
-mov eax,dword [eax]
-mov word [X],0
-add word [Y],7
-mov word [Color],0xffff
-call inttostr
+;mov eax,usbmousedata
+;mov bl,byte [devaddress]
+;or bl,80h
+;mov dh,0
+;mov ch,byte [msendp]
+;mov word [maxlen],4
+;call uhcicreatetdinterrupt ;check if this is giving any errors
+;mov edi,qh
+;mov eax,1
+;stosd
+;mov eax,dword [tdlocation]
+;stosd
+;mov edi,dword [uhciframelist]
+;mov eax,qh
+;or eax,2
+;mov ecx,1024
+;repe stosd
+;call uhciinterruptwait
+;mov eax,dword [tdlocation]
+;add eax,4
+;mov eax,dword [eax]
+;mov word [X],0
+;add word [Y],7
+;mov word [Color],0xffff
+;call inttostr
 mov edi,hidmsaddresses
 movzx eax,byte [hidmsindex]
 add edi,eax
