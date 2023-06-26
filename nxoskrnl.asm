@@ -179,7 +179,7 @@ je skipusb
 call usbdetect
 skipusb:
 
-call detectbootdrive
+;call detectbootdrive
 
 mov esi,titleString
 call sys_setupScreen
@@ -9077,20 +9077,21 @@ mov edi,dword [uhciframelist]
 mov eax,1
 mov ecx,1024
 repe stosd
-mov bl,byte [devaddress]
-or bl,80h
-mov dh,1
-mov eax,getconfigdescriptor
-push eax
-mov edi,eax
+mov edi,getconfigdescriptor
 add edi,6
 movzx eax,byte [102c2h]
 stosw
-pop eax
-mov ch,0
-mov word [maxlen],7
-mov byte [counterTDChain],6
-call createtdchain
+mov ebx,8
+mov edx,0
+div ebx
+cmp edx,0
+je skipaddonetd
+inc eax
+skipaddonetd:
+inc eax
+mov byte [counterTDChain],al
+mov bl,byte [devaddress]
+call uhcicreatehidconfigsetup
 mov edi,qh
 mov eax,1
 stosd
@@ -9102,6 +9103,29 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciwait
+mov bl,byte [devaddress]
+or bl,80h
+mov dh,1
+mov eax,dword [tdlocation]
+mov dword [uhciTDlocation],eax
+mov byte [setupornot],1
+mov eax,bufferpointer
+mov ch,0
+mov word [maxlen],7
+mov byte [uhciTDtoggle],1
+call createtdchain
+mov edi,qh
+mov eax,1
+stosd
+mov eax,dword [uhciTDlocation]
+stosd
+mov edi,dword [uhciframelist]
+mov eax,qh
+or eax,2
+mov ecx,1024
+repe stosd
+call uhciwait
+mov dword [uhciTDlocation],td
 jc failmsd
 cmp byte [102ceh],3
 je inithid
@@ -9926,7 +9950,7 @@ mov byte [datatoken],69h
 jmp savedevaddress2
 setupbytes:
 mov byte [statustoken],2dh
-mov byte [datatoken],2dh
+mov byte [datatoken],2dh ;look at the toggle in this function
 savedevaddress2:
 mov cl,bl
 mov dl,bl
@@ -10075,6 +10099,8 @@ skipnouhcitdoutput:
 mov dl,byte [maxTDChain]
 cmp byte [counterTDChain],dl
 jne skipsetuhcitdpacket
+cmp eax,bufferpointer
+je skipsetuhcitdpacket
 mov eax,bufferpointer
 jmp skipadd8uhcitd
 skipsetuhcitdpacket:
@@ -10115,58 +10141,6 @@ ret
 initusbkeyboard:
 cmp byte [esi+6],1
 jne doneinithid
-movzx eax,word [102c2h]
-sub eax,32
-mov edx,0
-mov ecx,8
-div ecx
-cmp edx,0
-je skipaddanothertd4
-inc eax
-skipaddanothertd4:
-;add eax,2 ;check hp desktop downstairs for keyboard stuff
-xchg ecx,eax
-push ecx
-mov bl,byte [devaddress]
-call uhcicreatehidconfigsetup
-mov edi,qh
-mov eax,1
-stosd
-mov eax,td
-stosd
-mov edi,dword [uhciframelist]
-mov eax,qh
-or eax,2
-mov ecx,1024
-repe stosd
-call uhciwait
-mov eax,102e0h
-pop ecx
-loopreadconfigdesckb:
-push eax
-push ecx
-mov word [maxlen],7
-mov bl,byte [devaddress]
-or bl,80h
-cmp ecx,1
-jg skipnullmaxlenkb
-mov word [maxlen],0x7ff
-and bl,7fh
-skipnullmaxlenkb:
-mov dh,0
-mov ch,0
-call createtdio
-call uhcisetupqhframelistandwait
-mov eax,dword [td+4]
-mov word [X],0
-add word [Y],7
-mov word [Color],0xffff
-call inttostr
-jc doneinithid
-pop ecx
-pop eax
-add eax,8
-loop loopreadconfigdesckb
 call lookforendp
 mov edi,kbendp
 add esi,2
@@ -10179,6 +10153,7 @@ mov bl,byte [devaddress]
 mov dh,0
 mov ch,0
 mov word [maxlen],7
+mov byte [counterTDChain],2
 call createtdchain
 mov edi,qh
 mov eax,1
@@ -10287,53 +10262,6 @@ jmp doneinithid
 initusbmouse:
 cmp byte [esi+6],1
 jne doneinithid
-movzx eax,word [102c2h]
-sub eax,32
-mov edx,0
-mov ecx,8
-div ecx
-cmp edx,0
-je skipaddanothertd3
-inc eax
-skipaddanothertd3:
-add eax,2
-xchg ecx,eax
-push ecx
-mov bl,byte [devaddress]
-call uhcicreatehidconfigsetup
-mov edi,qh
-mov eax,1
-stosd
-mov eax,td
-stosd
-mov edi,dword [uhciframelist]
-mov eax,qh
-or eax,2
-mov ecx,1024
-repe stosd
-call uhciwait
-mov eax,102e0h ;read what the hell is in 102e0h, idt its reading the whole config desscriptor again, just part of it
-pop ecx
-loopreadconfigdescms:
-push eax
-push ecx
-mov word [maxlen],7
-mov bl,byte [devaddress]
-or bl,80h
-cmp ecx,1
-jg skipnullmaxlen
-mov word [maxlen],0x7ff
-and bl,7fh
-skipnullmaxlen:
-mov dh,0
-mov ch,0
-call createtdio
-call uhcisetupqhframelistandwait
-jc doneinithid
-pop ecx
-pop eax
-add eax,8
-loop loopreadconfigdescms
 call lookforendp
 mov edi,msendp
 add esi,2
@@ -10633,7 +10561,7 @@ mov eax,dword [eax]
 cmp eax,4800000h
 je skipcreatemsinterrupt
 bt eax,19
-jc skipcreatemsinterrupt
+jc skipcreatemsinterrupt ;check if that bit is set during init
 bt eax,18
 jc skipcreatemsinterrupt
 mov eax,usbmousedata
@@ -11545,7 +11473,7 @@ tdlocation dd 20000h
 maxlen dw 0
 needsixtds db 0
 td6offset db 16
-portspeed db 0
+usetdtoggle db 0
 setupornot db 0
 fullspeed db 0
 endp1 db 0
