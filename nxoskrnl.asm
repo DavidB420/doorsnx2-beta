@@ -10605,6 +10605,10 @@ pop eax
 loop loopmsframe
 inc byte [uhcihidcurrentvals]
 skipcreatemsinterrupt:
+mov word [X],0
+add word [Y],7
+mov word [Color],0
+call inttostr
 cmp dword [usbmousedata],0
 jne usbmouseaction
 donemshandleuhci:

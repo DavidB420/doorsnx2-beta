@@ -30,6 +30,7 @@ retf
 
 start:
 
+push dx
 mov ax,0
 mov es,ax
 
@@ -57,13 +58,13 @@ mov cl,1
 mov bx,7c00h
 call readSectors
 
+pop dx
+
 mov ax,0
 mov es,ax
 mov ds,ax
 mov ss,ax
 mov sp,0 ;try recapping bootdev before jump
-
-mov dl,byte [bootdev]
 
 jmp 0x0000:7c00h
 
