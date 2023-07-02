@@ -179,7 +179,7 @@ je skipusb
 call usbdetect
 skipusb:
 
-;call detectbootdrive
+call detectbootdrive
 
 mov esi,titleString
 call sys_setupScreen
@@ -2426,7 +2426,6 @@ movzx eax,word [StartingFatSector]
 mov edi,disk_buffer
 movzx ecx,word [SectorsPerFat]
 mov dx,0
-;mov byte [selecteddrive],0
 call readwritesectors
 pop ax
 pop edi
@@ -3469,6 +3468,7 @@ mov bl,byte [msdbulkintoggle]
 mov byte [esi+1],bl
 skipusbmsdreadwrite:
 donereadwritesectors:
+shr byte [selecteddrive],1
 mov byte [usbhidenabled],1
 push ax
 mov al,0xb8
@@ -9036,7 +9036,6 @@ call pitdelay
 mov eax,dword [102c4h]
 ;cmp eax,40000000h
 ;jne nexthubport
-mov byte [bruhbyte],1
 call initmsd
 mov byte [fullspeed],0
 mov byte [setupornot],0
@@ -9044,7 +9043,6 @@ inc byte [devaddress]
 nexthubport:
 inc byte [currentport]
 jmp hubportreset
-bruhbyte db 0
 
 initmsd:
 mov bl,byte [devaddress]
