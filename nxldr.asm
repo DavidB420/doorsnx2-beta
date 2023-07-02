@@ -46,6 +46,8 @@ skipcheckdiskparams:
 ;Get values for kernel
 call getvalues
 
+call checkIfBootFloppy
+
 ;Switch to VGA 320x200x256 for prompt
 mov ax,0013h
 int 10h
@@ -149,6 +151,7 @@ picmaster db 0
 picslave db 0
 pciusable db 0
 floppyavail db 0
+osBootFloppy db 0
 
 align 4
 gdtdescriptor:
@@ -185,6 +188,20 @@ db 10010010b
 db 10001111b
 db 0
 gdtend:
+
+checkIfBootFloppy:
+pusha
+mov ax,0201h
+mov cx,1
+movzx dx,byte [bootdev]
+mov bx,disk_buffer
+int 13h
+cmp dword [disk_buffer+2],0x424D584E
+je skipIsBootFloppy
+mov byte [osBootFloppy],1
+skipIsBootFloppy:
+popa
+ret
 
 getvalues:
 push ax

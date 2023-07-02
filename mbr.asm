@@ -3,6 +3,10 @@
 use16
 org 7c00h
 
+jmp skipMbrSignature
+mbrSignature db 'NXMBR'
+skipMbrSignature:
+
 mov ax,0
 mov es,ax
 mov ds,ax

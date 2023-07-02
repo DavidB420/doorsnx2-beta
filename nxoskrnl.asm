@@ -66,30 +66,32 @@ mov dword [vidmem],eax
 
 mov byte [keyormouse],dl
 
-mov al,byte [2020ch]
+mov al,byte [2020fh]
 mov byte [bootdev],al
-mov ax,word [201fah]
+mov ax,word [201fdh]
 mov word [SectorsPerTrack],ax
-mov ax,word [201fch]
+mov ax,word [201ffh]
 mov word [SectorsPerFat],ax
-mov ax,word [201feh]
-mov word [RootDirEntries],ax
-mov al,byte [20200h]
-mov byte [SectorsPerCluster],al
 mov ax,word [20201h]
+mov word [RootDirEntries],ax
+mov al,byte [20203h]
+mov byte [SectorsPerCluster],al
+mov ax,word [20204h]
 mov word [StartingFatSector],ax
-mov ax,word [20203h]
+mov ax,word [20206h]
 mov word [Sides],ax
-mov ax,word [20205h]
+mov ax,word [20208h]
 mov word [StartingRootDirSector],ax
-mov al,byte [20233h]
-mov byte [picmaster],al
-mov al,byte [20234h]
-mov byte [picslave],al
-mov al,byte [20235h]
-mov byte [pciusable],al
 mov al,byte [20236h]
+mov byte [picmaster],al
+mov al,byte [20237h]
+mov byte [picslave],al
+mov al,byte [20238h]
+mov byte [pciusable],al
+mov al,byte [20239h]
 mov byte [floppyavail],al
+mov al,byte [2023ah]
+mov byte [osBootFloppy],al
 
 movzx eax,word [StartingRootDirSector]
 mov dword [directoryCluster],eax
@@ -243,6 +245,7 @@ drivecounter db 0
 pciusable db 0
 floppyavail db 0
 usbhidenabled db 0
+osBootFloppy db 0
 
 fontlocation:
 incbin 'fontdata.bin'
@@ -2592,6 +2595,11 @@ pushad
 call sys_returnnumberofdrives
 mov bl,al
 mov cl,0
+cmp byte [floppyavail],0
+je looptraversedrives
+cmp byte [osBootFloppy],1
+je looptraversedrives
+inc cl
 looptraversedrives:
 push bx
 mov byte [selecteddrive],cl
