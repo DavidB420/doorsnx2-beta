@@ -181,7 +181,8 @@ je skipusb
 call usbdetect
 skipusb:
 
-call detectbootdrive
+;call detectbootdrive
+mov byte [selecteddrive],1
 
 mov esi,titleString
 call sys_setupScreen
@@ -8743,6 +8744,8 @@ add dx,10h
 in ax,dx
 mov byte [uhcicounter],1
 looper:
+test ax,1
+jz skipuhciport
 mov edi,102c0h
 mov eax,0
 mov ecx,10
@@ -8789,6 +8792,11 @@ call uhciwait
 jc timeout
 cmp byte [uhcicounter],0
 je skipportreset
+mov byte [portUsed],0
+jmp dontskipuhciport
+skipuhciport:
+mov byte [portUsed],1
+dontskipuhciport:
 mov dx,word [uhcibase]
 add dx,12h
 in ax,dx
@@ -8816,6 +8824,8 @@ call pitdelay
 mov dx,word [uhcibase]
 add dx,12h
 in ax,dx
+cmp byte [portUsed],1
+je timeout
 skipportreset:
 cmp byte [102c4h],0
 jne notmsd
@@ -8975,6 +8985,7 @@ test eax,2
 jnz deviceconnectedtohub
 donehubport:
 doneuhciinit:
+mov byte [portUsed],0
 mov al,1
 movzx edx,word [uhcibase]
 call usbregister
@@ -10246,6 +10257,10 @@ or eax,2
 mov ecx,1024
 repe stosd
 call uhciinterruptwait
+mov edi,20380h
+mov eax,0
+mov ecx,8
+repe stosd
 mov edi,hidkbaddresses
 movzx eax,byte [hidkbindex]
 add edi,eax
@@ -10374,6 +10389,10 @@ repe stosd
 ;add word [Y],7
 ;mov word [Color],0xffff
 ;call inttostr
+mov edi,20380h
+mov eax,0
+mov ecx,8
+repe stosd
 mov edi,hidmsaddresses
 movzx eax,byte [hidmsindex]
 add edi,eax
@@ -10611,10 +10630,6 @@ pop eax
 loop loopmsframe
 inc byte [uhcihidcurrentvals]
 skipcreatemsinterrupt:
-mov word [X],0
-add word [Y],7
-mov word [Color],0
-call inttostr
 cmp dword [usbmousedata],0
 jne usbmouseaction
 donemshandleuhci:
@@ -11478,6 +11493,7 @@ uhcicounter db 1
 devaddress db 1
 hubaddr db 0
 currentport db 0
+portUsed db 0
 numberofhubports db 0
 tdlocation dd 20000h
 maxlen dw 0
